@@ -1,0 +1,442 @@
+{
+ "craftCount": 741,
+ "craftH": 2911710227,
+ "smeltCount": 100,
+ "smeltH": 1077390959,
+ "cutCount": 142,
+ "cutH": 244365956,
+ "smithCount": 25,
+ "smithH": 948898599,
+ "tagsH": 1316225037,
+ "trimMaterials": "iron_ingot,copper_ingot,gold_ingot,lapis_lazuli,emerald,diamond,netherite_ingot,redstone,amethyst_shard,quartz",
+ "enchCount": 39,
+ "enchEntries": [
+  {
+   "id": "protection",
+   "h": 1537344030,
+   "applies": 2121487602
+  },
+  {
+   "id": "fire_protection",
+   "h": 1472223396,
+   "applies": 2121487602
+  },
+  {
+   "id": "feather_falling",
+   "h": 2172456633,
+   "applies": 3366160797
+  },
+  {
+   "id": "blast_protection",
+   "h": 1310608437,
+   "applies": 2121487602
+  },
+  {
+   "id": "projectile_protection",
+   "h": 1381045896,
+   "applies": 2121487602
+  },
+  {
+   "id": "respiration",
+   "h": 1943512845,
+   "applies": 828462842
+  },
+  {
+   "id": "aqua_affinity",
+   "h": 3059628055,
+   "applies": 828462842
+  },
+  {
+   "id": "thorns",
+   "h": 1027505252,
+   "applies": 2121487602
+  },
+  {
+   "id": "depth_strider",
+   "h": 3177582717,
+   "applies": 3366160797
+  },
+  {
+   "id": "frost_walker",
+   "h": 4163836149,
+   "applies": 3366160797
+  },
+  {
+   "id": "curse_of_binding",
+   "h": 2177723900,
+   "applies": 1678984579
+  },
+  {
+   "id": "soul_speed",
+   "h": 594236090,
+   "applies": 3366160797
+  },
+  {
+   "id": "swift_sneak",
+   "h": 2132408257,
+   "applies": 256029117
+  },
+  {
+   "id": "sharpness",
+   "h": 980032441,
+   "applies": 2046169131
+  },
+  {
+   "id": "smite",
+   "h": 2236652412,
+   "applies": 2046169131
+  },
+  {
+   "id": "bane_of_arthropods",
+   "h": 1339670729,
+   "applies": 2046169131
+  },
+  {
+   "id": "knockback",
+   "h": 2482413542,
+   "applies": 2046169131
+  },
+  {
+   "id": "fire_aspect",
+   "h": 1825536365,
+   "applies": 2046169131
+  },
+  {
+   "id": "looting",
+   "h": 912542678,
+   "applies": 2046169131
+  },
+  {
+   "id": "sweeping_edge",
+   "h": 2878383060,
+   "applies": 2046169131
+  },
+  {
+   "id": "efficiency",
+   "h": 1498000299,
+   "applies": 1308643805
+  },
+  {
+   "id": "silk_touch",
+   "h": 3735826743,
+   "applies": 1308643805
+  },
+  {
+   "id": "unbreaking",
+   "h": 3224858503,
+   "applies": 833266957
+  },
+  {
+   "id": "fortune",
+   "h": 503192788,
+   "applies": 1308643805
+  },
+  {
+   "id": "power",
+   "h": 1659138114,
+   "applies": 1808301626
+  },
+  {
+   "id": "punch",
+   "h": 3957892657,
+   "applies": 1808301626
+  },
+  {
+   "id": "flame",
+   "h": 2657779568,
+   "applies": 1808301626
+  },
+  {
+   "id": "infinity",
+   "h": 2120020477,
+   "applies": 1808301626
+  },
+  {
+   "id": "luck_of_the_sea",
+   "h": 767203770,
+   "applies": 1501279684
+  },
+  {
+   "id": "lure",
+   "h": 4085487319,
+   "applies": 1501279684
+  },
+  {
+   "id": "loyalty",
+   "h": 190452646,
+   "applies": 35111762
+  },
+  {
+   "id": "impaling",
+   "h": 3832615769,
+   "applies": 35111762
+  },
+  {
+   "id": "riptide",
+   "h": 3449977008,
+   "applies": 35111762
+  },
+  {
+   "id": "channeling",
+   "h": 4016290229,
+   "applies": 35111762
+  },
+  {
+   "id": "multishot",
+   "h": 247916531,
+   "applies": 1138740684
+  },
+  {
+   "id": "quick_charge",
+   "h": 597386775,
+   "applies": 1138740684
+  },
+  {
+   "id": "piercing",
+   "h": 1228380584,
+   "applies": 1138740684
+  },
+  {
+   "id": "mending",
+   "h": 116254184,
+   "applies": 833266957
+  },
+  {
+   "id": "curse_of_vanishing",
+   "h": 198102012,
+   "applies": 2745892042
+  }
+ ],
+ "compatH": 3276712201,
+ "enchabilityH": 962467821,
+ "effectsCount": 31,
+ "effectsH": 1215984706,
+ "potionsCount": 41,
+ "potionsH": 314356151,
+ "brewCount": 48,
+ "brewH": 582193747,
+ "lootTables": [
+  {
+   "name": "dungeon",
+   "h": 1309658567
+  },
+  {
+   "name": "mineshaft",
+   "h": 141153569
+  },
+  {
+   "name": "stronghold_corridor",
+   "h": 2635057254
+  },
+  {
+   "name": "stronghold_library",
+   "h": 4143181695
+  },
+  {
+   "name": "desert_temple",
+   "h": 215083639
+  },
+  {
+   "name": "jungle_temple",
+   "h": 1648252339
+  },
+  {
+   "name": "igloo",
+   "h": 2261117239
+  },
+  {
+   "name": "pillager_outpost",
+   "h": 39324246
+  },
+  {
+   "name": "woodland_mansion",
+   "h": 2274042140
+  },
+  {
+   "name": "shipwreck_treasure",
+   "h": 861274335
+  },
+  {
+   "name": "shipwreck_supply",
+   "h": 2296203532
+  },
+  {
+   "name": "buried_treasure",
+   "h": 2821161484
+  },
+  {
+   "name": "underwater_ruin_small",
+   "h": 851540672
+  },
+  {
+   "name": "underwater_ruin_big",
+   "h": 3914877714
+  },
+  {
+   "name": "ruined_portal",
+   "h": 4208904875
+  },
+  {
+   "name": "nether_fortress",
+   "h": 2782220151
+  },
+  {
+   "name": "bastion_treasure",
+   "h": 511856872
+  },
+  {
+   "name": "bastion_other",
+   "h": 4236143653
+  },
+  {
+   "name": "end_city_treasure",
+   "h": 835234535
+  },
+  {
+   "name": "ancient_city",
+   "h": 2636912068
+  },
+  {
+   "name": "trail_ruins_common",
+   "h": 1665776193
+  },
+  {
+   "name": "trail_ruins_rare",
+   "h": 3488635899
+  },
+  {
+   "name": "desert_well_archaeology",
+   "h": 1967036931
+  },
+  {
+   "name": "desert_pyramid_archaeology",
+   "h": 2639882558
+  },
+  {
+   "name": "ocean_ruin_warm_archaeology",
+   "h": 1388455487
+  },
+  {
+   "name": "ocean_ruin_cold_archaeology",
+   "h": 3860309007
+  },
+  {
+   "name": "trail_ruins_archaeology",
+   "h": 3127674933
+  },
+  {
+   "name": "village_weaponsmith",
+   "h": 3929519235
+  },
+  {
+   "name": "village_house",
+   "h": 3533826582
+  },
+  {
+   "name": "village_toolsmith",
+   "h": 2468329178
+  },
+  {
+   "name": "village_temple",
+   "h": 2675694148
+  },
+  {
+   "name": "igloo_chest_dup",
+   "h": 3314171899
+  },
+  {
+   "name": "fishing_fish",
+   "h": 3247756049
+  },
+  {
+   "name": "fishing_junk",
+   "h": 3275766277
+  },
+  {
+   "name": "fishing_treasure",
+   "h": 1629698080
+  },
+  {
+   "name": "piglin_bartering",
+   "h": 1591521339
+  },
+  {
+   "name": "sniffer_digging",
+   "h": 3615738243
+  }
+ ],
+ "enchProbes": [
+  "diamond_sword@1=diamond_sword:fire_aspect:1",
+  "diamond_sword@5=diamond_sword:sweeping_edge:1,looting:1",
+  "diamond_sword@10=diamond_sword:sharpness:1",
+  "diamond_sword@15=diamond_sword:smite:2",
+  "diamond_sword@20=diamond_sword:smite:2",
+  "diamond_sword@25=diamond_sword:bane_of_arthropods:3,unbreaking:3,looting:1",
+  "diamond_sword@30=diamond_sword:knockback:2,smite:4,mending:1,fire_aspect:1",
+  "diamond_sword@39=diamond_sword:sweeping_edge:3,bane_of_arthropods:5,mending:1,knockback:1",
+  "diamond_sword@50=diamond_sword:sharpness:5,knockback:2,fire_aspect:1,looting:1",
+  "book@1=enchanted_book:soul_speed:1",
+  "book@5=enchanted_book:channeling:1",
+  "book@10=enchanted_book:infinity:1",
+  "book@15=enchanted_book:blast_protection:2",
+  "book@20=enchanted_book:unbreaking:2,loyalty:2",
+  "book@25=enchanted_book:loyalty:2,luck_of_the_sea:2,depth_strider:1,projectile_protection:1",
+  "book@30=enchanted_book:soul_speed:3,aqua_affinity:1",
+  "book@39=enchanted_book:unbreaking:3",
+  "book@50=enchanted_book:sweeping_edge:3,lure:3,mending:1,feather_falling:2",
+  "fishing_rod@1=fishing_rod:luck_of_the_sea:1",
+  "fishing_rod@5=fishing_rod:luck_of_the_sea:1",
+  "fishing_rod@10=fishing_rod:mending:1",
+  "fishing_rod@15=fishing_rod:unbreaking:2,luck_of_the_sea:1",
+  "fishing_rod@20=fishing_rod:mending:1,lure:1,luck_of_the_sea:1",
+  "fishing_rod@25=fishing_rod:lure:2",
+  "fishing_rod@30=fishing_rod:mending:1,luck_of_the_sea:2",
+  "fishing_rod@39=fishing_rod:lure:3,mending:1,luck_of_the_sea:1",
+  "fishing_rod@50=fishing_rod:mending:1,luck_of_the_sea:3,unbreaking:3,lure:1",
+  "diamond_chestplate@1=diamond_chestplate:unbreaking:1",
+  "diamond_chestplate@5=diamond_chestplate:protection:1",
+  "diamond_chestplate@10=diamond_chestplate:protection:1",
+  "diamond_chestplate@15=diamond_chestplate:blast_protection:2",
+  "diamond_chestplate@20=diamond_chestplate:fire_protection:2,thorns:1",
+  "diamond_chestplate@25=diamond_chestplate:thorns:1,protection:3,unbreaking:1,mending:1",
+  "diamond_chestplate@30=diamond_chestplate:blast_protection:4,mending:1",
+  "diamond_chestplate@39=diamond_chestplate:thorns:2,projectile_protection:4,unbreaking:2,mending:1",
+  "diamond_chestplate@50=diamond_chestplate:mending:1,protection:4,thorns:1,unbreaking:1",
+  "diamond_pickaxe@1=diamond_pickaxe:fortune:1",
+  "diamond_pickaxe@5=diamond_pickaxe:silk_touch:1",
+  "diamond_pickaxe@10=diamond_pickaxe:silk_touch:1",
+  "diamond_pickaxe@15=diamond_pickaxe:mending:1",
+  "diamond_pickaxe@20=diamond_pickaxe:unbreaking:2,efficiency:2",
+  "diamond_pickaxe@25=diamond_pickaxe:unbreaking:3",
+  "diamond_pickaxe@30=diamond_pickaxe:unbreaking:3,efficiency:3,mending:1,fortune:1",
+  "diamond_pickaxe@39=diamond_pickaxe:mending:1,efficiency:4",
+  "diamond_pickaxe@50=diamond_pickaxe:mending:1,efficiency:5,unbreaking:3,fortune:1",
+  "bow@1=bow:flame:1",
+  "bow@5=bow:power:1",
+  "bow@10=bow:mending:1",
+  "bow@15=bow:power:2",
+  "bow@20=bow:unbreaking:2",
+  "bow@25=bow:flame:1",
+  "bow@30=bow:unbreaking:3",
+  "bow@39=bow:power:4,flame:1,punch:1,mending:1",
+  "bow@50=bow:infinity:1,punch:2,flame:1,power:2",
+  "iron_boots@1=iron_boots:blast_protection:1",
+  "iron_boots@5=iron_boots:protection:1",
+  "iron_boots@10=iron_boots:fire_protection:1",
+  "iron_boots@15=iron_boots:blast_protection:2,soul_speed:1",
+  "iron_boots@20=iron_boots:protection:2",
+  "iron_boots@25=iron_boots:protection:3,unbreaking:3",
+  "iron_boots@30=iron_boots:frost_walker:2,soul_speed:3,projectile_protection:3,mending:1",
+  "iron_boots@39=iron_boots:frost_walker:2",
+  "iron_boots@50=iron_boots:soul_speed:3,blast_protection:4,depth_strider:2,mending:1",
+  "diamond_hoe@1=diamond_hoe:unbreaking:1",
+  "diamond_hoe@5=diamond_hoe:efficiency:1",
+  "diamond_hoe@10=diamond_hoe:unbreaking:1",
+  "diamond_hoe@15=diamond_hoe:mending:1",
+  "diamond_hoe@20=diamond_hoe:efficiency:2,mending:1,fortune:1,unbreaking:1",
+  "diamond_hoe@25=diamond_hoe:unbreaking:3",
+  "diamond_hoe@30=diamond_hoe:unbreaking:3",
+  "diamond_hoe@39=diamond_hoe:fortune:3,mending:1,efficiency:2,unbreaking:1",
+  "diamond_hoe@50=diamond_hoe:silk_touch:1,unbreaking:3,efficiency:3,mending:1"
+ ]
+}
