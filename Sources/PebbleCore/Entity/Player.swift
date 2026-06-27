@@ -525,27 +525,55 @@ public final class Player: LivingEntity {
         }
         return true
     }
+    /// The stack in the hand currently driving the interact pipeline. The use
+    /// path sets `useItemHand` to "off" for an offhand fallback so consume /
+    /// replace / damage land on the right slot; it is "main" everywhere else.
+    public var usingHandStack: ItemStack? { useItemHand == "off" ? offHand : mainHand }
+
     public override func consumeHeld(_ n: Int) {
         if gameMode == GameMode.creative { return }
+        if useItemHand == "off" {
+            guard let s = offHand else { return }
+            s.count -= n
+            if s.count <= 0 { offHand = nil }
+            return
+        }
         guard let s = mainHand else { return }
         s.count -= n
         if s.count <= 0 { mainHand = nil }
     }
     public override func replaceHeld(_ stack: ItemStack) {
-        let s = mainHand
         if gameMode == GameMode.creative {
             if countItem(stack.id) == 0 { give(stack) }
             return
         }
+        let off = useItemHand == "off"
+        let s = off ? offHand : mainHand
         if let s, s.count > 1 {
             s.count -= 1
             if !give(stack) { spawnItem(world, x, y, z, stack) }
+        } else if off {
+            offHand = stack
         } else {
             mainHand = stack
         }
     }
     public override func damageHeld(_ amount: Int) {
-        if let s = mainHand { damageStack(s, amount) }
+        if let s = usingHandStack { damageStack(s, amount) }
+    }
+
+    /// Raising a shield (either hand) for at least 5 ticks counts as blocking.
+    public func isBlocking() -> Bool {
+        guard usingItem, useItemTicks >= 5, let s = usingHandStack else { return false }
+        return itemDef(s.id).name == "shield"
+    }
+    /// True when `attacker` is within the player's front hemisphere.
+    private func shieldFacesAttacker(_ attacker: Entity) -> Bool {
+        let dx = attacker.x - x, dz = attacker.z - z
+        let d2 = dx * dx + dz * dz
+        if d2 < 1e-6 { return true }
+        let d = d2.squareRoot()
+        return (dx / d) * -detSin(yaw) + (dz / d) * detCos(yaw) > 0
     }
     public func damageStack(_ s: ItemStack, _ amount: Int) {
         if gameMode == GameMode.creative { return }
@@ -583,6 +611,13 @@ public final class Player: LivingEntity {
     @discardableResult
     public override func hurt(_ amount: Double, _ source: String, _ attacker: Entity? = nil) -> Bool {
         if gameMode == GameMode.creative && source != "void" { return false }
+        // shield: negate frontal physical damage from an attacker we're facing
+        if amount > 0, isBlocking(), let attacker, shieldFacesAttacker(attacker),
+           ["mob", "player", "projectile", "explosion", "fireball", "wither_skull"].contains(source) {
+            world.hooks.playSound("item.shield.block", x, y, z, 1, 0.8 + Double.random(in: 0..<0.4))
+            if let s = usingHandStack { damageStack(s, max(1, Int(amount.rounded(.down)))) }
+            return false
+        }
         let r = super.hurt(amount, source, attacker)
         if r {
             addExhaustion(0.1)

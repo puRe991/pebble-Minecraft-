@@ -169,7 +169,7 @@ open class LivingEntity: Entity {
 
     @discardableResult
     open override func hurt(_ amount: Double, _ source: String, _ attacker: Entity? = nil) -> Bool {
-        if dead || amount <= 0 { return false }
+        if dead || deathTime > 0 || amount <= 0 { return false }
         if invulnTicks > 0 { return false }
         if source == "fire" && hasEffect("fire_resistance") { return false }
         if source == "lava" && hasEffect("fire_resistance") { return false }

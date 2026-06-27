@@ -663,7 +663,9 @@ private func checkEndPortalComplete(_ world: World, _ x: Int, _ y: Int, _ z: Int
 // =============================================================================
 public func useItem(_ ctx: InteractCtx, _ hit: RaycastHit?) -> Bool {
     let world = ctx.world, player = ctx.player
-    guard let held = player.mainHand else { return false }
+    // honor the active interact hand so the offhand fallback (doUse) uses the
+    // offhand item; consume/replace/damageHeld follow the same hand.
+    guard let held = (player.useItemHand == "off" ? player.offHand : player.mainHand) else { return false }
     let def = itemDef(held.id)
     let name = def.name
 
@@ -1300,7 +1302,7 @@ private func sturdyTopOk(_ c: Int) -> Bool {
 // =============================================================================
 public func finishUsingItem(_ ctx: InteractCtx) {
     let world = ctx.world, player = ctx.player
-    guard let held = player.mainHand else { return }
+    guard let held = player.usingHandStack else { return }
     let def = itemDef(held.id)
     if let food = def.food {
         player.feed(food.hunger, food.saturation)
@@ -1340,12 +1342,13 @@ public func finishUsingItem(_ ctx: InteractCtx) {
     }
     player.usingItem = false
     player.useItemTicks = 0
+    player.useItemHand = "main"
 }
 
 public func releaseUsingItem(_ ctx: InteractCtx) {
     let player = ctx.player
     if !player.usingItem { return }
-    let held = player.mainHand
+    let held = player.usingHandStack
     let name = held.map { itemDef($0.id).name } ?? ""
     if name == "bow" { shootBow(player, player.useItemTicks) }
     else if name == "trident" { throwTridentPlayer(player, player.useItemTicks) }
@@ -1357,6 +1360,7 @@ public func releaseUsingItem(_ ctx: InteractCtx) {
     }
     player.usingItem = false
     player.useItemTicks = 0
+    player.useItemHand = "main"
 }
 
 // =============================================================================

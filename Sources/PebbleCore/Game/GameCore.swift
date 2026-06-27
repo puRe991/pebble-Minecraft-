@@ -1651,7 +1651,7 @@ public final class GameCore {
     private func tickUsing() {
         let p = player!
         if p.dead || p.deathTime > 0 || (host?.hasScreen() ?? false) {
-            if p.usingItem { p.usingItem = false }
+            if p.usingItem { p.usingItem = false; p.useItemHand = "main" }
             return
         }
         let ctx = interactCtx()
@@ -1660,7 +1660,7 @@ public final class GameCore {
                 releaseUsingItem(ctx)
             } else {
                 p.useItemTicks += 1
-                let held = p.mainHand
+                let held = p.usingHandStack
                 let def = held.map { itemDef($0.id) }
                 if let def, def.food != nil || def.name == "potion" || def.name == "milk_bucket" {
                     if p.useItemTicks % 4 == 0 {
@@ -1917,6 +1917,7 @@ public final class GameCore {
     private func doAttack() {
         let p = player!
         if p.dead || p.deathTime > 0 || (host?.hasScreen() ?? false) { return }
+        p.useItemHand = "main" // an attack always swings (and wears) the main hand
         let target = crosshairEntity(ATTACK_REACH)
         p.attackAnim = 1
         if let target {
@@ -1934,6 +1935,7 @@ public final class GameCore {
     private func doUse() {
         let p = player!
         if p.dead || p.deathTime > 0 || (host?.hasScreen() ?? false) { return }
+        p.useItemHand = "main"
         let ctx = interactCtx()
         // entities first
         let target = crosshairEntity(REACH_SURVIVAL - 1)
@@ -1952,7 +1954,17 @@ public final class GameCore {
         }
         if useItem(ctx, hit) {
             p.attackAnim = 0.6
+            return
         }
+        // offhand fallback: retry the held-item use with the offhand item
+        // (food, shield, torches/blocks, throwables, …) when the main hand did nothing.
+        if p.offHand != nil {
+            p.useItemHand = "off"
+            let used = useItem(ctx, hit)
+            if !p.usingItem { p.useItemHand = "main" } // keep "off" only for an ongoing use
+            if used { p.attackAnim = 0.6; return }
+        }
+        if !p.usingItem { p.useItemHand = "main" }
     }
 
     private func pickBlock() {
@@ -2026,6 +2038,15 @@ public final class GameCore {
         guard inWorld else { return }
         keys.insert(code)
         let p = player!
+        // while sleeping, swallow input — Escape/Sneak/Jump leave the bed
+        if p.sleepTicks > 0 {
+            if code == "Escape" || code == keybinds["sneak"] || code == keybinds["jump"] {
+                p.sleepTicks = 0
+                p.bedPos = nil
+                host?.playSound("block.wood.step", p.x, p.y, p.z, 0.4, 1)
+            }
+            return
+        }
         if code == "Escape" {
             host?.openPauseScreen()
             host?.releasePointer()

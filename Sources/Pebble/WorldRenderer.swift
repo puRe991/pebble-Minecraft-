@@ -1236,6 +1236,19 @@ final class WorldRenderer {
                               fog: (SIMD3<Float>, Float, Float), partial: Double, timeSec: Double) {
         let w = game.world
         let maxD = game.settings.entityDistance * game.settings.entityDistance
+        // contact (blob) shadows: a flat dark disc projected onto the ground
+        // under each living entity, drawn just before its model.
+        func groundYUnder(_ x: Double, _ feetY: Double, _ z: Double) -> Double? {
+            let bx = ifloorD(x), bz = ifloorD(z)
+            var y = ifloorD(feetY + 0.05)
+            var steps = 0
+            while steps < 24 {
+                let id = w.getBlock(bx, y, bz) >> 4
+                if id > 0 && id < blockDefs.count && blockDefs[id].solid { return Double(y + 1) }
+                y -= 1; steps += 1
+            }
+            return nil
+        }
         for e in w.entities {
             if e.dead { continue }
             guard let ent = e as? Entity else { continue }
@@ -1272,6 +1285,13 @@ final class WorldRenderer {
             pose.open = (ent as? Shulker)?.peekAmount ?? 0
             pose.hanging = ent.type == "bat" && ent.onGround
             pose.alpha = deathFlip > 0 ? 1 - deathFlip * 0.6 : 1
+            // blob shadow under living entities (incl. the player in 3rd person);
+            // fade out as the entity rises above the ground beneath it.
+            if liv != nil, let gy = groundYUnder(ix, iy, iz), iy - gy <= 6 {
+                let fade = Float(max(0, 1 - (iy - gy) / 6))
+                drawBlobShadow(enc, viewProj, ix - camPos.x, gy + 0.015 - camPos.y, iz - camPos.z,
+                               ent.width * 0.5 + 0.18, 0.34 * fade)
+            }
             enc.setDepthStencilState(depthWrite)
             entityRenderer.draw(enc, pipeline: packTargets ? entityPipelineHDR : entityPipeline, sampler: atlasSampler,
                                 viewProj: viewProj, camPos: camPos, name: name, p: pose,
@@ -1296,6 +1316,34 @@ final class WorldRenderer {
                 }
             }
         }
+    }
+
+    /// Flat ground-projected disc, flat black with `alpha`. Double-sided so the
+    /// active cull mode doesn't drop it. Vertices are camera-relative.
+    private func drawBlobShadow(_ enc: MTLRenderCommandEncoder, _ viewProj: simd_float4x4,
+                                _ sx: Double, _ sy: Double, _ sz: Double,
+                                _ r: Double, _ alpha: Float) {
+        if alpha <= 0.01 { return }
+        let seg = 14
+        var verts: [Float] = []
+        let cy = Float(sy), cx = Float(sx), cz = Float(sz)
+        for s in 0..<seg {
+            let a0 = Double(s) / Double(seg) * .pi * 2
+            let a1 = Double(s + 1) / Double(seg) * .pi * 2
+            let x0 = Float(sx + cos(a0) * r), z0 = Float(sz + sin(a0) * r)
+            let x1 = Float(sx + cos(a1) * r), z1 = Float(sz + sin(a1) * r)
+            verts.append(contentsOf: [cx, cy, cz, x0, cy, z0, x1, cy, z1])
+            verts.append(contentsOf: [cx, cy, cz, x1, cy, z1, x0, cy, z0])
+        }
+        var u = LineUniforms(viewProj: viewProj, color: SIMD4<Float>(0, 0, 0, alpha))
+        enc.setRenderPipelineState(linePipeline)
+        enc.setDepthStencilState(depthRead)
+        verts.withUnsafeBytes { raw in
+            enc.setVertexBytes(raw.baseAddress!, length: raw.count, index: 0)
+        }
+        enc.setVertexBytes(&u, length: MemoryLayout<LineUniforms>.stride, index: 1)
+        enc.setFragmentBytes(&u, length: MemoryLayout<LineUniforms>.stride, index: 1)
+        enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: verts.count / 3)
     }
 
     // ---- item / projectile billboards ------------------------------------------

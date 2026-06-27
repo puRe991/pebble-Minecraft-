@@ -3,6 +3,27 @@
 All notable changes to Pebble. Versions follow `MAJOR.MINOR.PATCH`; the
 in-app version string comes from `PEBBLE_VERSION` (PebbleCore/Game/Saves.swift).
 
+## 1.0.3 — 2026-06-27 — gameplay bug fixes (#11)
+
+- **Mobs can no longer be hit while dying, and no longer dupe their drops.**
+  A mob's death was processed every tick it kept taking damage during the
+  ~1s death animation, re-running its loot drop (and slime splits / raid
+  `bad_omen`) each time. Damage is now rejected once an entity enters its
+  death animation, so loot drops exactly once. Re-baselined the entity goldens.
+- **Tree leaves now drop saplings, sticks and apples when they decay.** Leaf
+  decay destroyed the block without rolling its drop table; it now uses the
+  normal natural-break path, matching what hand-breaking already dropped.
+- **Beds now show a sleep overlay.** Sleeping faded straight to a frozen frame
+  with no feedback; the screen now fades to black with a "Sleeping…" prompt,
+  and Sneak/Esc leaves the bed.
+- **Entities now cast a contact shadow.** A soft dark disc is projected onto
+  the ground beneath living entities — including your own player in third
+  person — and fades out as they rise off the ground.
+- **The offhand can now use items, and shields block.** The use action falls
+  back to the offhand when the main hand does nothing (food, shields, torches,
+  throwables, …), and raising a shield now negates frontal melee, projectile
+  and explosion damage.
+
 ## 1.0.2 — 2026-06-13 — bug fixes
 
 - **Fixed `./pebble install` failing to compile on Swift 6.2.x.** The

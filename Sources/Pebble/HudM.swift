@@ -55,6 +55,20 @@ final class HUD {
         let W = ui.width, H = ui.height
         let cx = (W / 2).rounded(.down)
 
+        // sleeping: fade the screen to black, show a hint, suppress the rest of
+        // the HUD. sleepTicks runs 1→100 (GameCore skips to morning past 100);
+        // fade in over the first ~2s so it reads as drifting off.
+        if player.sleepTicks > 0 {
+            let a = min(1.0, Double(player.sleepTicks) / 40.0)
+            cv.setFill("rgba(0,0,0,\(a))")
+            cv.fillRect(0, 0, W, H)
+            if a > 0.55 {
+                cv.drawTextCentered("Sleeping...", cx, (H / 2).rounded() - 18, 2)
+                cv.drawTextCentered("Press Sneak to leave the bed", cx, (H / 2).rounded() + 6, 1, "#b0b0b0")
+            }
+            return
+        }
+
         // vanilla pack HUD when the GUI sheets are loaded; procedural fallback
         let packHud = ui.hasSheet("icons") && ui.hasSheet("widgets")
 

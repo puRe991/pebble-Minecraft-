@@ -318,7 +318,7 @@ public func registerFarmingHandlers() {
                 if foundLog { break }
             }
             if !foundLog {
-                world.breakBlockNaturally(x, y, z)
+                popBlock(world, x, y, z) // decay drops saplings/sticks/apples like a natural break
             }
         }
     }
