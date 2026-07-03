@@ -3,6 +3,14 @@
 All notable changes to Pebble. Versions follow `MAJOR.MINOR.PATCH`; the
 in-app version string comes from `PEBBLE_VERSION` (PebbleCore/Game/Saves.swift).
 
+## 1.0.5 — 2026-07-03 — keybind fix (#13)
+
+- **Shift and Control can now be assigned to keybinds.** On macOS the modifier
+  keys fire `flagsChanged` rather than `keyDown`, so a modifier press never
+  reached the open Controls screen and couldn't be bound (e.g. setting Sprint to
+  Left Shift). A modifier press is now delivered to the active screen so it can
+  be captured, while releases still reach the game as before.
+
 ## 1.0.4 — 2026-07-02 — water & aquatic-plant fixes (#12)
 
 - **Smooth water/biome color transitions.** Water (and grass/foliage) tint is now

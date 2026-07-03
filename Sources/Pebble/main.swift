@@ -266,8 +266,16 @@ final class GameView: MTKView {
         guard let game, let ui = ui else { return }
         let shift = event.modifierFlags.contains(.shift)
         let ctrl = event.modifierFlags.contains(.control)
+        let wasShift = ui.shiftDown, wasCtrl = ui.ctrlDown
         ui.shiftDown = shift
+        ui.ctrlDown = ctrl
         if ui.hasScreen() {
+            // a modifier PRESS reaches the open screen so it can be bound as a
+            // keybind (Shift/Control fire flagsChanged, not keyDown)
+            if let screen = ui.current() {
+                if shift && !wasShift { _ = screen.onKey(ui, game, "ShiftLeft") }
+                if ctrl && !wasCtrl { _ = screen.onKey(ui, game, "ControlLeft") }
+            }
             // releases must still reach the game — eating them left the
             // player permanently sneaking after shift+E, release, close
             if !shift { game.keyUp("ShiftLeft") }

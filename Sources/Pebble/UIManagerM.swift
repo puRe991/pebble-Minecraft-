@@ -167,6 +167,7 @@ final class UIManager {
     var mouseX = 0.0
     var mouseY = 0.0
     var shiftDown = false
+    var ctrlDown = false
     var cursorStack: ItemStack?
     private var stack: [Screen] = []
     var tooltipLines: [String]?
