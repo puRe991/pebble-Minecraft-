@@ -3,6 +3,23 @@
 All notable changes to Pebble. Versions follow `MAJOR.MINOR.PATCH`; the
 in-app version string comes from `PEBBLE_VERSION` (PebbleCore/Game/Saves.swift).
 
+## 1.0.4 — 2026-07-02 — water & aquatic-plant fixes (#12)
+
+- **Smooth water/biome color transitions.** Water (and grass/foliage) tint is now
+  averaged over a 7×7 neighborhood instead of picked per-block, so the color no
+  longer steps abruptly at a biome border (e.g. where two ocean biomes meet).
+- **Underwater plants are properly submerged.** Seagrass, kelp, coral and sea
+  pickles now render the surrounding water volume, so they no longer sit in
+  un-rendered air pockets under the surface.
+- **No more notch in the water surface around surface plants.** Water next to a
+  seagrass/kelp poking the surface no longer bulges to a full block, so the
+  surface stays flat.
+- **Breaking an aquatic plant leaves water, not an air pocket** — for player
+  breaks, natural pops, and piston/explosion breaks.
+- **Breaking one seagrass no longer destroys its neighbors.** The water that
+  filled a broken plant's cell was spreading and washing away adjacent
+  (replaceable) plants; spreading water now leaves waterlogged plants intact.
+
 ## 1.0.3 — 2026-06-27 — gameplay bug fixes (#11)
 
 - **Mobs can no longer be hit while dying, and no longer dupe their drops.**

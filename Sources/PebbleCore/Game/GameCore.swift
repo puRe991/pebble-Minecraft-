@@ -1192,17 +1192,20 @@ public final class GameCore {
         var blocks = [UInt16](repeating: 0, count: P * P * P)
         var skyLight = [UInt8](repeating: 0, count: P * P * P)
         var blockLight = [UInt8](repeating: 0, count: P * P * P)
-        var biomes = [UInt8](repeating: 0, count: P * P)
+        var biomes = [UInt8](repeating: 0, count: BIOME_P * BIOME_P)
         let minY = w.info.minY
         let baseY = minY + sy * 16
         let baseX = cx * 16, baseZ = cz * 16
-        for dz in -1...16 {
-            for dx in -1...16 {
+        // The biome halo (BIOME_H) is wider than the 1-cell block halo so the
+        // mesher can blend biome colors — but it still spans the same 3x3 chunk
+        // neighborhood, so no extra chunks need to be loaded.
+        for dz in -BIOME_H...(15 + BIOME_H) {
+            for dx in -BIOME_H...(15 + BIOME_H) {
                 let wx = baseX + dx, wz = baseZ + dz
                 guard let c = w.getChunkAt(wx, wz) else { return nil }
                 let lx = posMod(wx, 16), lz = posMod(wz, 16)
-                let col = (dz + 1) * P + (dx + 1)
-                biomes[col] = UInt8(c.biomeAt(lx, min(minY + w.info.height - 1, max(minY, baseY + 8)), lz))
+                biomes[(dz + BIOME_H) * BIOME_P + (dx + BIOME_H)] = UInt8(c.biomeAt(lx, min(minY + w.info.height - 1, max(minY, baseY + 8)), lz))
+                guard dx >= -1, dx <= 16, dz >= -1, dz <= 16 else { continue }
                 for dy in -1...16 {
                     let wy = baseY + dy
                     let idx = ((dy + 1) * P + (dz + 1)) * P + (dx + 1)

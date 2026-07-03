@@ -45,6 +45,12 @@ public struct MeshOutput {
 
 private let P = 18
 
+// Biome tint is blended over a (2*BIOME_H+1)² neighborhood to smooth the color
+// seam where two biomes meet (vanilla does the same). The mesh biome array
+// therefore carries a BIOME_H-cell halo — wider than the 1-cell block halo.
+public let BIOME_H = 3
+public let BIOME_P = 16 + 2 * BIOME_H   // 22
+
 @inline(__always) private func idxOf(_ x: Int, _ y: Int, _ z: Int) -> Int {
     ((y + 1) * P + (z + 1)) * P + (x + 1)
 }
@@ -137,15 +143,46 @@ final class SectionMesher {
     @inline(__always) func cellAt(_ x: Int, _ y: Int, _ z: Int) -> Int { Int(input.blocks[idxOf(x, y, z)]) }
     @inline(__always) func skyAt(_ x: Int, _ y: Int, _ z: Int) -> Int { Int(input.skyLight[idxOf(x, y, z)]) }
     @inline(__always) func blkAt(_ x: Int, _ y: Int, _ z: Int) -> Int { Int(input.blockLight[idxOf(x, y, z)]) }
-    @inline(__always) func biomeAt(_ x: Int, _ z: Int) -> Int { Int(input.biomes[(z + 1) * P + (x + 1)]) }
+    @inline(__always) func biomeAt(_ x: Int, _ z: Int) -> Int { Int(input.biomes[(z + BIOME_H) * BIOME_P + (x + BIOME_H)]) }
+
+    // Per-column blended tints (grass/foliage/water), precomputed once so the
+    // expensive neighborhood average isn't repeated for every cell in a column.
+    private var tintGrass = [Int32](repeating: 0, count: 256)
+    private var tintFoliage = [Int32](repeating: 0, count: 256)
+    private var tintWater = [Int32](repeating: 0, count: 256)
+
+    private func precomputeTints() {
+        for z in 0..<16 {
+            for x in 0..<16 {
+                var rg = 0, gg = 0, bg = 0, rf = 0, gf = 0, bf = 0, rw = 0, gw = 0, bw = 0, n = 0
+                for dz in -BIOME_H...BIOME_H {
+                    for dx in -BIOME_H...BIOME_H {
+                        let bi = biomeAt(x + dx, z + dz)
+                        guard bi < BIOMES.count, let bd = BIOMES[bi] else { continue }
+                        let cg = Int(bd.grassColor), cf = Int(bd.foliageColor), cw = Int(bd.waterColor)
+                        rg += (cg >> 16) & 0xff; gg += (cg >> 8) & 0xff; bg += cg & 0xff
+                        rf += (cf >> 16) & 0xff; gf += (cf >> 8) & 0xff; bf += cf & 0xff
+                        rw += (cw >> 16) & 0xff; gw += (cw >> 8) & 0xff; bw += cw & 0xff
+                        n += 1
+                    }
+                }
+                let i = z * 16 + x
+                if n == 0 {
+                    tintGrass[i] = Int32(GRASS_FALLBACK); tintFoliage[i] = Int32(GRASS_FALLBACK); tintWater[i] = Int32(GRASS_FALLBACK)
+                } else {
+                    tintGrass[i] = Int32(((rg / n) << 16) | ((gg / n) << 8) | (bg / n))
+                    tintFoliage[i] = Int32(((rf / n) << 16) | ((gf / n) << 8) | (bf / n))
+                    tintWater[i] = Int32(((rw / n) << 16) | ((gw / n) << 8) | (bw / n))
+                }
+            }
+        }
+    }
 
     func tintFor(_ cell: Int, _ x: Int, _ z: Int) -> Int {
         let t = TINT_OF[cell >> 4]
         if t == 0 { return WHITE }
-        guard biomeAt(x, z) < BIOMES.count, let bd = BIOMES[biomeAt(x, z)] else { return GRASS_FALLBACK }
-        if t == 1 { return Int(bd.grassColor) }
-        if t == 2 { return Int(bd.foliageColor) }
-        return Int(bd.waterColor)
+        let i = z * 16 + x
+        return Int(t == 1 ? tintGrass[i] : (t == 2 ? tintFoliage[i] : tintWater[i]))
     }
 
     func animFor(_ id: Int, _ shape: Shape) -> Int {
@@ -208,6 +245,7 @@ final class SectionMesher {
     }
 
     func run() -> MeshOutput {
+        precomputeTints()
         greedyPass()
         blockPass()
         return MeshOutput(opaque: opaque.build(), cutout: cutout.build(), translucent: translucent.build())
@@ -377,6 +415,14 @@ final class SectionMesher {
                     if shape == .liquid {
                         emitLiquid(target, x, y, z, cell, tileOf(1), tint, anim, s4, b4)
                         continue
+                    }
+                    // waterlogged plants/corals (seagrass, kelp, sea_pickle, coral)
+                    // sit in water — emit the surrounding water volume too so they
+                    // aren't left in an un-rendered air pocket under the surface.
+                    if isWaterlogged(UInt16(cell)) {
+                        let wCell = Int(B.water) << 4
+                        emitLiquid(translucent, x, y, z, wCell, Int(TILE_TABLE[(wCell << 3) | 1]),
+                                   tintFor(wCell, x, z), 1, s4, b4)
                     }
                     if shape == .cross || shape == .crop || shape == .tallCross ||
                         shape == .rootsShape || shape == .netherWart || shape == .web ||
@@ -695,10 +741,25 @@ final class SectionMesher {
     }
 
     private func emitLiquid(_ b: MeshBuilder, _ x: Int, _ y: Int, _ z: Int, _ cell: Int, _ tile: Int, _ tint: Int, _ anim: Int, _ sky: Int, _ blk: Int) {
-        let id = cell >> 4
+        let rawId = cell >> 4
+        // A water source OR any waterlogged cell (seagrass/kelp/coral/sea_pickle)
+        // renders as a water volume; treat all such neighbors as the same fluid
+        // so submerged plants aren't left sitting in an un-rendered air pocket.
+        let water = rawId == Int(B.water) || (rawId != Int(B.lava) && isWaterlogged(UInt16(cell)))
+        let id = water ? Int(B.water) : rawId
+        let fluidCell = (water && rawId != Int(B.water)) ? (Int(B.water) << 4) : cell
+        func sameFluid(_ n: Int) -> Bool { water ? isWaterlogged(UInt16(n)) : (n >> 4) == id }
+        func fluidHeightAt(_ n: Int) -> Double {
+            // real fluid uses its own level; a waterlogged plant acts as a source.
+            // cornerH only reaches here when the neighbour has no fluid above it
+            // (the submerged case already returned 1), so use the surface source
+            // height — otherwise the water bulges up to a full block next to
+            // seagrass/kelp at the surface and leaves a notch.
+            ((n >> 4) == Int(B.water) || (n >> 4) == Int(B.lava)) ? heightOfFluid(n) : 14.0 / 16
+        }
         let xd = Double(x), yd = Double(y), zd = Double(z)
-        let sameAbove = (cellAt(x, y + 1, z) >> 4) == id
-        let hSelf = sameAbove ? 1 : heightOfFluid(cell)
+        let sameAbove = sameFluid(cellAt(x, y + 1, z))
+        let hSelf = sameAbove ? 1 : heightOfFluid(fluidCell)
         let em = id == Int(B.lava) ? 1 : 0
         // corner heights: max over the 4 cells sharing the corner
         func cornerH(_ cx: Int, _ cz: Int) -> Double {
@@ -707,9 +768,9 @@ final class SectionMesher {
             for (dx, dz) in [(cx - 1, cz - 1), (cx, cz - 1), (cx - 1, cz), (cx, cz)] {
                 if dx == 0 && dz == 0 { continue }
                 let n = cellAt(x + dx, y, z + dz)
-                if (n >> 4) == id {
-                    if (cellAt(x + dx, y + 1, z + dz) >> 4) == id { return 1 }
-                    h = max(h, heightOfFluid(n))
+                if sameFluid(n) {
+                    if sameFluid(cellAt(x + dx, y + 1, z + dz)) { return 1 }
+                    h = max(h, fluidHeightAt(n))
                 }
             }
             return h
@@ -734,7 +795,7 @@ final class SectionMesher {
         for (dx, dz, dir) in sides {
             let n = cellAt(x + dx, y, z + dz)
             let nid = n >> 4
-            if nid == id || OPAQUE[nid] == 1 || (isWaterlogged(UInt16(n)) && id == Int(B.water)) { continue }
+            if sameFluid(n) || OPAQUE[nid] == 1 { continue }
             let hA = dir == 2 ? h00 : dir == 3 ? h01 : dir == 4 ? h00 : h10
             let hB = dir == 2 ? h10 : dir == 3 ? h11 : dir == 4 ? h01 : h11
             if dir < 4 {
@@ -758,7 +819,7 @@ final class SectionMesher {
             }
         }
         let below = cellAt(x, y - 1, z)
-        if (below >> 4) != id && OPAQUE[below >> 4] == 0 {
+        if !sameFluid(below) && OPAQUE[below >> 4] == 0 {
             b.quad(
                 xd, yd, zd, xd, yd, zd + 1, xd + 1, yd, zd + 1, xd + 1, yd, zd,
                 0, 0, 0, 1, 1, 1, 1, 0,

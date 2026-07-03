@@ -1421,7 +1421,9 @@ public func finishBreaking(_ ctx: InteractCtx, _ x: Int, _ y: Int, _ z: Int) {
     } else if shape == .tallCross {
         let upper = (c & 1) != 0
         let oy = upper ? y - 1 : y + 1
-        if (world.getBlock(x, oy, z) >> 4) == id { world.setBlock(x, oy, z, 0, 2 | 4) }
+        let oc = world.getBlock(x, oy, z)
+        // a waterlogged tall plant (seagrass) leaves water behind, not an air pocket
+        if (oc >> 4) == id { world.setBlock(x, oy, z, isWaterlogged(UInt16(oc)) ? Int(cell(B.water, 0)) : 0, 2 | 4) }
     }
 
     // infested → spawn silverfish
@@ -1440,7 +1442,9 @@ public func finishBreaking(_ ctx: InteractCtx, _ x: Int, _ y: Int, _ z: Int) {
         }
     }
 
-    world.setBlock(x, y, z, 0)
+    // breaking a waterlogged block (seagrass/kelp/coral/…) leaves the water it
+    // occupied, not an air pocket
+    world.setBlock(x, y, z, isWaterlogged(UInt16(c)) ? Int(cell(B.water, 0)) : 0)
     player.stats["blocksMined"] = (player.stats["blocksMined"] ?? 0) + 1
 
     if player.gameMode == GameMode.creative { return }

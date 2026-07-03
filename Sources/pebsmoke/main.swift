@@ -181,6 +181,7 @@ section("biomes (vs goldens)")
 registerAllBiomes()
 check("biome count = enum count", BIOMES.count == Biome.allCases.count, "got \(BIOMES.count)")
 
+
 /// candidate paths for a golden file — goldens/ beside the package manifest,
 /// tolerant of being run from the repo root, its parent, or a subdirectory
 func goldenPaths(_ name: String) -> [String] {
@@ -692,15 +693,16 @@ if let g = loadJSON("mesh-goldens.json") {
         var blocks = [UInt16](repeating: 0, count: P * P * P)
         var skyLight = [UInt8](repeating: 0, count: P * P * P)
         var blockLight = [UInt8](repeating: 0, count: P * P * P)
-        var biomes = [UInt8](repeating: 0, count: P * P)
+        var biomes = [UInt8](repeating: 0, count: BIOME_P * BIOME_P)
         let baseY = GEN_MIN_Y + sy * 16
         let baseX = cx * 16, baseZ = cz * 16
-        for dz in -1...16 {
-            for dx in -1...16 {
+        for dz in -BIOME_H...(15 + BIOME_H) {
+            for dx in -BIOME_H...(15 + BIOME_H) {
                 let wx = baseX + dx, wz = baseZ + dz
                 let c = litChunk(seed, floorDiv(wx, 16), floorDiv(wz, 16))
                 let lx = posMod(wx, 16), lz = posMod(wz, 16)
-                biomes[(dz + 1) * P + (dx + 1)] = chunkBiomeAt(c, lx, min(GEN_MIN_Y + WORLD_H - 1, max(GEN_MIN_Y, baseY + 8)), lz)
+                biomes[(dz + BIOME_H) * BIOME_P + (dx + BIOME_H)] = chunkBiomeAt(c, lx, min(GEN_MIN_Y + WORLD_H - 1, max(GEN_MIN_Y, baseY + 8)), lz)
+                guard dx >= -1, dx <= 16, dz >= -1, dz <= 16 else { continue }
                 for dy in -1...16 {
                     let wy = baseY + dy
                     let idx = ((dy + 1) * P + (dz + 1)) * P + (dx + 1)

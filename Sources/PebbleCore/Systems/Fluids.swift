@@ -169,6 +169,10 @@ private func fluidTick(_ world: World, _ x: Int, _ y: Int, _ z: Int, _ c: Int) {
         if !canReplace(world, nx, y, nz, fluidId) { continue }
         let ncell = world.getBlock(nx, y, nz)
         let nid = ncell >> 4
+        // a waterlogged plant (seagrass/kelp/coral) already holds water — don't
+        // let spreading water wash it away (breaking one seagrass would otherwise
+        // cascade and destroy its neighbours).
+        if fluidId == Int(B.water) && nid != Int(B.water) && isWaterlogged(UInt16(ncell)) { continue }
         if nid == fluidId {
             let nl = ncell & 7
             if (ncell & 8) == 0 && nl <= spreadLevel { continue } // already as strong

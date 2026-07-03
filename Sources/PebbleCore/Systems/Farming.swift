@@ -678,7 +678,7 @@ public func popBlock(_ world: World, _ x: Int, _ y: Int, _ z: Int) {
     let def = blockDefs[id]
     world.hooks.playSound("block." + def.sound + ".break", Double(x) + 0.5, Double(y) + 0.5, Double(z) + 0.5, 0.8, 1)
     world.hooks.addParticles("block", Double(x) + 0.5, Double(y) + 0.5, Double(z) + 0.5, 10, 0.4, c)
-    world.setBlock(x, y, z, 0)
+    world.setBlock(x, y, z, isWaterlogged(UInt16(c)) ? Int(cell(B.water, 0)) : 0)
     if !world.rule("doTileDrops") { return }
     let ctx = DropCtx(fortune: 0, silkTouch: false, toolType: .none, toolTier: 0,
                       shears: false, random: { gameRng.nextFloat() })

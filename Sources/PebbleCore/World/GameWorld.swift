@@ -247,7 +247,7 @@ public final class World {
         // used by pistons/explosions for Destroy-behavior blocks
         let cell = getBlock(x, y, z)
         if cell == 0 { return }
-        setBlock(x, y, z, 0)
+        setBlock(x, y, z, isWaterlogged(UInt16(cell)) ? (Int(B.water) << 4) : 0)
         hooks.addParticles("block", Double(x) + 0.5, Double(y) + 0.5, Double(z) + 0.5, 12, 0.4, cell)
     }
 
