@@ -139,9 +139,12 @@ bloom, the single-draw-call UI canvas) all has to be reproduced.
    a sampler; the shaders decode tile/light/tint from vertex words A/B and sample
    it. CI compile-checks it (SDL3 from source, `PEBBLE_GPU=1 swift build`). It
    needs a GPU + display to run and its shaders compiled to SPIR-V
-   (`Sources/pebwin/shaders/`). Remaining: the cutout/translucent passes and the
-   post stack (shadows/SSAO/bloom/ACES) — mirroring the macOS `WorldRenderer`
-   order. The CPU renderer stays the fallback and reference.
+   (`Sources/pebwin/shaders/`). **Cutout blocks (leaves/glass) now render** in
+   both paths — the CPU raycaster alpha-tests them and alpha-blends translucent
+   blocks (water/ice), and the GPU path draws the cutout layer (shader discard).
+   Remaining: a translucent blend pipeline on the GPU, and the post stack
+   (shadows/SSAO/bloom/ACES) — mirroring the macOS `WorldRenderer` order. The CPU
+   renderer stays the fallback and reference.
 6. **Packaging** — `.exe` + installer, resources bundled beside it.
 
 ### Building the GPU path
