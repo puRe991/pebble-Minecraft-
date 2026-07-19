@@ -125,10 +125,15 @@ bloom, the single-draw-call UI canvas) all has to be reproduced.
    physics, AI, lighting, meshing — then reports), and opens a real SDL3 window
    with input wired into `GameCore` when built with `PEBBLE_SDL=1`. Audio synth
    and the voxel renderer are the parts still stubbed.
-5. **Renderer** — the large piece: implement `Renderer` (`Sources/pebwin/
-   Renderer.swift`) on a GPU API. Bring up the mesh/atlas pipeline first (opaque
-   pass), then layer on entities, particles, sky, shadows, ultra — mirroring the
-   macOS `WorldRenderer` pass order.
+5. 🚧 **Renderer** — **playable now via a CPU renderer.** `SoftRender.swift`
+   raycasts the real voxel world into a framebuffer (first-person, face-shaded),
+   which the SDL window presents each frame — so with `PEBBLE_SDL=1` you can walk
+   around a Pebble world on Windows today. CI renders a frame headlessly on
+   Windows/Linux each run (`first-person-*` artifacts). The remaining work is the
+   *GPU* renderer for fidelity/perf: implement `Renderer` on Vulkan/D3D12 (or
+   bgfx), using the atlas textures and mirroring the macOS `WorldRenderer` pass
+   order (opaque → cutout → translucent → entities → particles → sky → shadows →
+   ultra). The CPU renderer is the fallback and the reference.
 6. **Packaging** — `.exe` + installer, resources bundled beside it.
 
 ### Building the desktop window

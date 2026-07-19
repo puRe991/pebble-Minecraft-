@@ -109,11 +109,13 @@ func finish() -> Never {
     // headless screenshot: render one first-person frame of the real world
     if let shot = shotPath, game.hasWorld() {
         var shotFrame = RGBFrame(renderW, renderH)
-        game.player?.pitch = 0.32   // tilt slightly down so the landscape frames well
-        let cam = game.camState(1, timeSec: nowSeconds() - startClock)
+        var cam = game.camState(1, timeSec: nowSeconds() - startClock)
+        // frame the screenshot as a vista: lift the eye and look gently down
+        cam.y += 6
+        cam.pitch = 0.20
         print(String(format: "pebwin: rendering %d×%d frame from (%.1f, %.1f, %.1f)…",
                      renderW, renderH, cam.x, cam.y, cam.z))
-        renderWorld(game.world, cam, into: &shotFrame)
+        renderWorld(game.world, cam, into: &shotFrame, maxDist: 140)
         writeBMP(shot, shotFrame)
         print("pebwin: wrote \(shot)")
     }
