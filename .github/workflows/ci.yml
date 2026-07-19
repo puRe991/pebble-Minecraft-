@@ -42,6 +42,26 @@ jobs:
           name: first-person-linux
           path: pebble-view-linux.bmp
 
+  gpu-compile:
+    name: GPU renderer compiles (SDL_gpu, Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake ninja-build git
+      - name: Build & install SDL3
+        run: |
+          git clone --depth 1 --branch main https://github.com/libsdl-org/SDL.git /tmp/SDL
+          cmake -S /tmp/SDL -B /tmp/SDL/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF \
+            -DSDL_TEST_LIBRARY=OFF -DSDL_X11=OFF -DSDL_WAYLAND=OFF
+          cmake --build /tmp/SDL/build
+          cmake --install /tmp/SDL/build
+          ldconfig || true
+      - name: Compile pebwin with the SDL_gpu backend
+        run: PEBBLE_GPU=1 swift build --target pebwin -Xcc -I/usr/local/include -Xlinker -L/usr/local/lib
+
   windows:
     name: Engine + golden suite (Windows)
     runs-on: windows-latest

@@ -42,16 +42,12 @@ do {
 }
 
 // ---- assemble the front-end --------------------------------------------------
-let renderer: Renderer = NullRenderer()   // mesh accounting; the view is raycast
-let audio: AudioSink = NullAudio()
-let host = FrontendHost(renderer: renderer, audio: audio)
-
 var platform: Platform = HeadlessPlatform()
 #if PEBBLE_SDL
 if wantWindow {
     if let sdl = SDLPlatform(width: 1280, height: 720, title: "Pebble") {
         platform = sdl
-        (renderW, renderH) = sdl.renderSize
+        if sdl.renderSize.0 > 0 { (renderW, renderH) = sdl.renderSize }
     } else {
         print("pebwin: SDL init failed — falling back to headless")
     }
@@ -61,6 +57,24 @@ if wantWindow {
     print("pebwin: built without SDL (rebuild with PEBBLE_SDL=1 and SDL3 installed) — running headless")
 }
 #endif
+
+// Renderer: GPU (SDL_gpu) when PEBBLE_GPU and a window exists, else the CPU
+// raycaster's mesh accountant. In GPU mode the engine's meshes flow to the GPU.
+let renderer: Renderer
+#if PEBBLE_GPU
+if let sdl = platform as? SDLPlatform, let gpu = GPURenderer(window: sdl.sdlWindow) {
+    renderer = gpu
+    print("pebwin: GPU renderer (SDL_gpu) active")
+} else {
+    print("pebwin: GPU renderer unavailable — falling back to CPU")
+    renderer = NullRenderer()
+}
+#else
+let cpuRenderer = NullRenderer()
+renderer = cpuRenderer
+#endif
+let audio: AudioSink = NullAudio()
+let host = FrontendHost(renderer: renderer, audio: audio)
 
 // ---- boot the engine ---------------------------------------------------------
 let game = GameCore()               // registers every block/item/biome/entity/system
@@ -73,10 +87,16 @@ var tick = 0
 var frame = RGBFrame(max(1, renderW), max(1, renderH))
 
 func renderAndPresent() {
-    guard game.hasWorld(), platform.renderSize.0 > 0 else { return }
+    guard game.hasWorld() else { return }
     let cam = game.camState(1, timeSec: nowSeconds() - startClock)
-    renderWorld(game.world, cam, into: &frame)
-    platform.present(frame)
+    #if PEBBLE_GPU
+    renderer.draw(cam, partial: 1)
+    #else
+    if platform.renderSize.0 > 0 {
+        renderWorld(game.world, cam, into: &frame)
+        platform.present(frame)
+    }
+    #endif
 }
 
 func stepOnce() {

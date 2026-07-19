@@ -20,14 +20,17 @@ let coreDependencies: [Target.Dependency] = [
     .target(name: "CSQLite", condition: .when(platforms: [.linux, .windows, .android])),
 ]
 
-// The desktop front-end (pebwin) can open a real SDL3 window when built with
-// PEBBLE_SDL=1 (and SDL3 dev libraries installed). Off by default so the normal
-// build and CI stay SDL-free and run pebwin headless.
-let useSDL = ProcessInfo.processInfo.environment["PEBBLE_SDL"] != nil
+// The desktop front-end (pebwin) can open a real SDL3 window (PEBBLE_SDL=1) and
+// use the SDL_gpu GPU backend (PEBBLE_GPU=1, which implies SDL). Both need SDL3
+// dev libraries installed. Off by default so the normal build and CI stay
+// SDL-free and run pebwin headless (with the CPU renderer).
+let env = ProcessInfo.processInfo.environment
+let useGPU = env["PEBBLE_GPU"] != nil
+let useSDL = useGPU || env["PEBBLE_SDL"] != nil
 let pebwinDeps: [Target.Dependency] = useSDL ? ["PebbleCore", "CSDL"] : ["PebbleCore"]
-let pebwinSwift: [SwiftSetting] = useSDL
-    ? [.swiftLanguageMode(.v5), .define("PEBBLE_SDL")]
-    : [.swiftLanguageMode(.v5)]
+var pebwinSwift: [SwiftSetting] = [.swiftLanguageMode(.v5)]
+if useSDL { pebwinSwift.append(.define("PEBBLE_SDL")) }
+if useGPU { pebwinSwift.append(.define("PEBBLE_GPU")) }
 
 var targets: [Target] = [
     // Vendored SQLite (public-domain amalgamation) for non-Apple platforms.
