@@ -1,0 +1,127 @@
+name: Release (Windows build)
+
+# Turns a version tag into a permanent, downloadable Windows build. Pushing a
+# tag like `v0.1.0` builds pebwin.exe, bundles its runtime (the same self-
+# contained package CI smoke-tests on every commit), zips it, and attaches the
+# zip to a GitHub Release — so the download outlives the 90-day CI-artifact
+# window and has a stable URL.
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    name: Build & publish the Windows .exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Swift
+        uses: SwiftyLab/setup-swift@v1
+        with:
+          swift-version: "6.1"
+      - name: Install SDL3 (vcpkg)
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install "sdl3:x64-windows"
+      - name: Build pebwin (release, SDL window)
+        shell: pwsh
+        env:
+          PEBBLE_SDL: "1"
+        run: |
+          $inc = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\include"
+          $lib = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib"
+          swift build -c release --product pebwin -Xcc "-I$inc" -Xlinker "-L$lib"
+      - name: Assemble the distributable
+        shell: pwsh
+        run: |
+          $dist = "Pebble-Windows"
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          Copy-Item ".build\release\pebwin.exe" $dist
+          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\SDL3.dll" $dist
+          # Copy every DLL from each PATH dir hosting the Swift/Foundation runtime,
+          # then prune to the actual runtime set (the smoke test re-verifies).
+          foreach ($d in ($env:PATH -split ';')) {
+            if ($d -and (Test-Path $d) -and (
+                (Test-Path (Join-Path $d 'swiftCore.dll')) -or
+                (Test-Path (Join-Path $d 'dispatch.dll')) -or
+                (Test-Path (Join-Path $d 'Foundation.dll')) -or
+                (Test-Path (Join-Path $d 'FoundationEssentials.dll')))) {
+              Get-ChildItem "$d\*.dll" | Copy-Item -Destination $dist -Force -ErrorAction SilentlyContinue
+            }
+          }
+          $vc = (& where.exe vcruntime140.dll 2>$null | Select-Object -First 1)
+          if ($vc) {
+            $vcdir = Split-Path $vc.Trim()
+            Copy-Item "$vcdir\vcruntime140*.dll","$vcdir\msvcp140*.dll" -Destination $dist -Force -ErrorAction SilentlyContinue
+          }
+          $keep = @(
+            'swiftCore','swiftCRT','swiftWinSDK','swiftSwiftOnoneSupport',
+            'swift_Concurrency','swift_StringProcessing','swift_RegexParser',
+            'swiftSynchronization','swiftDispatch','swiftRegexBuilder','swiftObservation',
+            'swiftDistributed','swiftDemangle',
+            'Foundation','FoundationEssentials','FoundationInternationalization',
+            'FoundationNetworking','FoundationXML','_FoundationICU','_FoundationCShims',
+            'dispatch','BlocksRuntime',
+            'vcruntime140','vcruntime140_1','vcruntime140_threads','msvcp140','SDL3'
+          )
+          Get-ChildItem "$dist\*.dll" | Where-Object { $keep -notcontains $_.BaseName } | Remove-Item -Force
+          "@echo off`r`nstart """" pebwin.exe --window`r`n" | Out-File -Encoding ascii "$dist\play.bat"
+          @"
+          Pebble for Windows (preview build)
+
+          Double-click play.bat (or run pebwin.exe --window) to open a window.
+          Controls: WASD move, mouse look, Space jump, Shift sneak, Esc/close to quit.
+          This is the CPU renderer (textured, day/night). Everything runs locally,
+          offline, and writes only to %APPDATA%\Pebble.
+
+          If Windows SmartScreen warns about an unsigned app, choose "More info" -> "Run anyway".
+          "@ | Out-File -Encoding ascii "$dist\README.txt"
+          Get-ChildItem $dist | Select-Object Name, Length
+          "{0:N1} MB total" -f ((Get-ChildItem $dist -Recurse | Measure-Object Length -Sum).Sum / 1MB)
+      - name: Smoke-test the packaged exe (isolated PATH)
+        shell: pwsh
+        run: |
+          $dist = (Resolve-Path Pebble-Windows).Path
+          $env:PATH = "$dist;$env:SystemRoot\System32;$env:SystemRoot"
+          Push-Location $dist
+          & ".\pebwin.exe" --seed 1 --ticks 5 --shot smoke.bmp
+          Pop-Location
+          if (Test-Path "$dist\smoke.bmp") { Write-Host "OK: the packaged exe ran standalone"; Remove-Item "$dist\smoke.bmp" }
+          else { Write-Error "the packaged exe did not run standalone"; exit 1 }
+      - name: Zip the bundle
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF -like 'refs/tags/*') { $env:GITHUB_REF -replace 'refs/tags/','' } else { '${{ github.event.inputs.tag }}' }
+          Compress-Archive -Path "Pebble-Windows\*" -DestinationPath "Pebble-Windows-$tag.zip" -Force
+          "ZIP=Pebble-Windows-$tag.zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+      - name: Publish the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Pebble for Windows ${{ github.event.inputs.tag || github.ref_name }}
+          body: |
+            Self-contained Windows preview build of Pebble (SDL window, CPU renderer, textured, day/night).
+
+            **Run it:** download the zip below, unzip, and double-click `play.bat`
+            (or run `pebwin.exe --window`). No install needed — the Swift runtime
+            and `SDL3.dll` are bundled, and CI smoke-tests that the package launches
+            with only its own DLLs on `PATH`.
+
+            Controls: WASD move, mouse look, Space jump, Shift sneak, Esc to quit.
+
+            This is a preview: the full Metal renderer/audio remain macOS-only.
+            See WINDOWS.md for the port status and roadmap.
+          files: ${{ env.ZIP }}
+          draft: false
+          prerelease: true

@@ -73,7 +73,9 @@ pebble test         run the 456-check golden test suite
 
 For development you can also run straight from the checkout — `swift run -c release Pebble` — and the app will find its packaged assets in `packaging/`.
 
-**Windows / Linux (experimental):** the game app is macOS-native (Metal/AppKit), but the engine and its golden test suite are portable and build off-Apple with `swift build -c release` / `swift run -c release pebsmoke`. There is no playable Windows build yet — see [WINDOWS.md](WINDOWS.md) for the porting status and roadmap.
+**Windows (preview):** there is now a playable Windows build. A cross-platform desktop front-end (`pebwin` — an SDL3 window driving the real engine through a CPU voxel renderer, textured, with day/night) boots the same `PebbleCore` engine into a real window. Grab a self-contained build from the [Releases](https://github.com/thebriangao/pebble/releases) page (or the `pebble-windows-exe` artifact on any green CI run), unzip, and double-click `play.bat` — no Swift or SDL install needed; CI smoke-tests that the package launches standalone. The full Metal renderer/audio remain macOS-only for now. See [WINDOWS.md](WINDOWS.md) for the port status, what the front-end covers, and the roadmap.
+
+**Linux (engine only):** the engine and its 456-check golden suite build off-Apple with `swift build -c release` / `swift run -c release pebsmoke`, and `pebwin` renders headless first-person frames there too.
 
 ## Controls
 
