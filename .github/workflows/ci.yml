@@ -32,7 +32,7 @@ jobs:
       - name: Render a world map (seed 4242)
         run: swift run pebmap --seed 4242 --chunks 32 --out pebble-map-linux.bmp
       - name: Boot the sim and render a first-person frame (pebwin)
-        run: swift run pebwin --seed 4242 --ticks 300 --time 12000 --shot pebble-view-linux.bmp
+        run: swift run pebwin --seed 4242 --ticks 300 --time 13000 --shot pebble-view-linux.bmp
       - uses: actions/upload-artifact@v4
         with:
           name: world-map-linux
@@ -90,7 +90,7 @@ jobs:
       - name: Render a world map (seed 4242)
         run: swift run pebmap --seed 4242 --chunks 32 --out pebble-map-windows.bmp
       - name: Boot the sim and render a first-person frame (pebwin)
-        run: swift run pebwin --seed 4242 --ticks 300 --time 12000 --shot pebble-view-windows.bmp
+        run: swift run pebwin --seed 4242 --ticks 300 --time 13000 --shot pebble-view-windows.bmp
       - uses: actions/upload-artifact@v4
         with:
           name: world-map-windows
