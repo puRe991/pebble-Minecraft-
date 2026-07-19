@@ -20,6 +20,7 @@ var seed = "4242"
 var maxTicks = 200
 var wantWindow = false
 var shotPath: String? = nil
+var shotTime: Int? = nil
 var renderW = 480, renderH = 270
 do {
     let a = CommandLine.arguments
@@ -29,11 +30,12 @@ do {
         case "--seed":  if i + 1 < a.count { seed = a[i + 1]; i += 1 }
         case "--ticks": if i + 1 < a.count { maxTicks = Int(a[i + 1]) ?? maxTicks; i += 1 }
         case "--shot":  if i + 1 < a.count { shotPath = a[i + 1]; i += 1 }
+        case "--time":  if i + 1 < a.count { shotTime = Int(a[i + 1]); i += 1 }
         case "--width":  if i + 1 < a.count { renderW = Int(a[i + 1]) ?? renderW; i += 1 }
         case "--height": if i + 1 < a.count { renderH = Int(a[i + 1]) ?? renderH; i += 1 }
         case "--window": wantWindow = true
         case "-h", "--help":
-            print("usage: pebwin [--seed S] [--ticks N] [--shot FILE.bmp] [--width W --height H] [--window]")
+            print("usage: pebwin [--seed S] [--ticks N] [--shot FILE.bmp] [--time 0..23999] [--width W --height H] [--window]")
             exit(0)
         default: break
         }
@@ -130,6 +132,7 @@ func finish() -> Never {
     // headless screenshot: render one textured first-person frame (CPU path)
     #if !PEBBLE_GPU
     if let shot = shotPath, game.hasWorld() {
+        if let t = shotTime { game.world.dayTime = ((t % 24000) + 24000) % 24000 }  // set time of day for the shot
         var shotFrame = RGBFrame(renderW, renderH)
         var cam = game.camState(1, timeSec: nowSeconds() - startClock)
         // frame the screenshot as a vista: lift the eye and look gently down

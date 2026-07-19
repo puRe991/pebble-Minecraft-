@@ -44,8 +44,14 @@ func renderWorld(_ world: World, _ cam: CamState, _ atlas: Atlas, into f: inout 
     let uy = rz * fx - rx * fz
     let uz = rx * fy - ry * fx
 
-    let sky = (0.53, 0.68, 0.92)
-    let horizon = (0.78, 0.86, 0.96)
+    // sky colour by time of day: day blue ↔ warm twilight ↔ night navy.
+    // (skyDarken is 0 at noon … 11 at night; the engine's own value.)
+    let dayF = max(0, min(1, 1 - world.skyDarken() / 11))
+    let tw = 1 - abs(dayF * 2 - 1)                    // twilight peaks at dawn/dusk
+    let zenith = mix3((0.02, 0.03, 0.10), (0.40, 0.60, 0.95), dayF)
+    let horizon = mix3(mix3((0.05, 0.07, 0.16), (0.72, 0.82, 0.96), dayF),
+                       (0.85, 0.52, 0.32), tw * 0.55)
+    let sky = zenith
 
     for py in 0..<H {
         let sv = (1 - 2 * (Double(py) + 0.5) / Double(H)) * tanHalf
