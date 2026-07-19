@@ -25,12 +25,12 @@ jobs:
     container: swift:6.1
     steps:
       - uses: actions/checkout@v4
-      - name: Build (release)
-        run: swift build -c release
+      - name: Build
+        run: swift build
       - name: Golden suite (456 checks)
-        run: swift run -c release pebsmoke
+        run: swift run pebsmoke
       - name: Render a world map (seed 4242)
-        run: swift run -c release pebmap --seed 4242 --chunks 48 --out pebble-map-linux.bmp
+        run: swift run pebmap --seed 4242 --chunks 32 --out pebble-map-linux.bmp
       - uses: actions/upload-artifact@v4
         with:
           name: world-map-linux
@@ -45,12 +45,12 @@ jobs:
         uses: SwiftyLab/setup-swift@v1
         with:
           swift-version: "6.1"
-      - name: Build (release)
-        run: swift build -c release
+      - name: Build
+        run: swift build
       - name: Golden suite (456 checks)
-        run: swift run -c release pebsmoke
+        run: swift run pebsmoke
       - name: Render a world map (seed 4242)
-        run: swift run -c release pebmap --seed 4242 --chunks 48 --out pebble-map-windows.bmp
+        run: swift run pebmap --seed 4242 --chunks 32 --out pebble-map-windows.bmp
       - uses: actions/upload-artifact@v4
         with:
           name: world-map-windows

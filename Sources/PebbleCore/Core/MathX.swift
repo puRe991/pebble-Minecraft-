@@ -44,6 +44,14 @@ public struct simd_float4x4 {
         get { switch i { case 0: return columns.0; case 1: return columns.1; case 2: return columns.2; default: return columns.3 } }
         set { switch i { case 0: columns.0 = newValue; case 1: columns.1 = newValue; case 2: columns.2 = newValue; default: columns.3 = newValue } }
     }
+    /// matrix × column-vector (column-major: result = Σ colᵢ · vᵢ)
+    @inline(__always) public static func * (m: simd_float4x4, v: SIMD4<Float>) -> SIMD4<Float> {
+        m.columns.0 * v.x + m.columns.1 * v.y + m.columns.2 * v.z + m.columns.3 * v.w
+    }
+    /// matrix × matrix (each result column is `a` applied to a column of `b`)
+    @inline(__always) public static func * (a: simd_float4x4, b: simd_float4x4) -> simd_float4x4 {
+        simd_float4x4(columns: (a * b.columns.0, a * b.columns.1, a * b.columns.2, a * b.columns.3))
+    }
 }
 public let matrix_identity_float4x4 = simd_float4x4(1)
 #endif
