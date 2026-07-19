@@ -62,6 +62,17 @@ jobs:
           ldconfig || true
       - name: Compile pebwin with the SDL_gpu backend
         run: PEBBLE_GPU=1 swift build --target pebwin -Xcc -I/usr/local/include -Xlinker -L/usr/local/lib
+      - name: Compile shaders (GLSL → SPIR-V)
+        run: |
+          apt-get install -y --no-install-recommends glslang-tools
+          cd Sources/pebwin/shaders
+          glslangValidator -V -S vert section.vert.glsl       -o section.vert.spv
+          glslangValidator -V -S frag section.frag.glsl       -o section.frag.spv
+          glslangValidator -V -S frag section_blend.frag.glsl -o section_blend.frag.spv
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pebwin-shaders-spv
+          path: Sources/pebwin/shaders/*.spv
 
   windows:
     name: Engine + golden suite (Windows)
