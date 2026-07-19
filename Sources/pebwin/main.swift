@@ -132,12 +132,16 @@ func finish() -> Never {
     // headless screenshot: render one textured first-person frame (CPU path)
     #if !PEBBLE_GPU
     if let shot = shotPath, game.hasWorld() {
-        if let t = shotTime { game.world.dayTime = ((t % 24000) + 24000) % 24000 }  // set time of day for the shot
         var shotFrame = RGBFrame(renderW, renderH)
         var cam = game.camState(1, timeSec: nowSeconds() - startClock)
-        // frame the screenshot as a vista: lift the eye and look gently down
-        cam.y += 6
-        cam.pitch = 0.20
+        cam.y += 5
+        cam.pitch = 0.10
+        if let t = shotTime {
+            // set the time of day and turn to face the sun/moon for the shot
+            game.world.dayTime = ((t % 24000) + 24000) % 24000
+            let beta = Double(game.world.dayTime) / 24000 * 2 * .pi
+            cam.yaw = atan2(-cos(beta), 0.35)
+        }
         print(String(format: "pebwin: rendering %d×%d frame from (%.1f, %.1f, %.1f)…",
                      renderW, renderH, cam.x, cam.y, cam.z))
         renderWorld(game.world, cam, atlas, into: &shotFrame, maxDist: 140)
