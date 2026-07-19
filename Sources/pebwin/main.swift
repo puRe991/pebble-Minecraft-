@@ -58,8 +58,12 @@ if wantWindow {
 }
 #endif
 
-// Renderer: GPU (SDL_gpu) when PEBBLE_GPU and a window exists, else the CPU
-// raycaster's mesh accountant. In GPU mode the engine's meshes flow to the GPU.
+// Boot the engine first so blocks and atlas tiles are registered before any
+// atlas is built (GameCore.init does all registration).
+let game = GameCore()
+
+// Renderer: GPU (SDL_gpu, uploads the atlas as a texture) when PEBBLE_GPU and a
+// window exists; otherwise the CPU raycaster, which samples the atlas on the CPU.
 let renderer: Renderer
 #if PEBBLE_GPU
 if let sdl = platform as? SDLPlatform, let gpu = GPURenderer(window: sdl.sdlWindow) {
@@ -70,14 +74,11 @@ if let sdl = platform as? SDLPlatform, let gpu = GPURenderer(window: sdl.sdlWind
     renderer = NullRenderer()
 }
 #else
-let cpuRenderer = NullRenderer()
-renderer = cpuRenderer
+let atlas = Atlas()                 // code-generated texture atlas for the CPU renderer
+renderer = NullRenderer()
 #endif
 let audio: AudioSink = NullAudio()
 let host = FrontendHost(renderer: renderer, audio: audio)
-
-// ---- boot the engine ---------------------------------------------------------
-let game = GameCore()               // registers every block/item/biome/entity/system
 game.host = host
 game.createWorld(name: "pebwin", seedText: seed, mode: GameMode.survival, difficulty: 2)
 print("pebwin: booted overworld (seed \(seed)) on \(platformName()); ticking the real sim…")
@@ -93,7 +94,7 @@ func renderAndPresent() {
     renderer.draw(cam, partial: 1)
     #else
     if platform.renderSize.0 > 0 {
-        renderWorld(game.world, cam, into: &frame)
+        renderWorld(game.world, cam, atlas, into: &frame)
         platform.present(frame)
     }
     #endif
@@ -126,7 +127,8 @@ func stepOnce() {
 }
 
 func finish() -> Never {
-    // headless screenshot: render one first-person frame of the real world
+    // headless screenshot: render one textured first-person frame (CPU path)
+    #if !PEBBLE_GPU
     if let shot = shotPath, game.hasWorld() {
         var shotFrame = RGBFrame(renderW, renderH)
         var cam = game.camState(1, timeSec: nowSeconds() - startClock)
@@ -135,10 +137,11 @@ func finish() -> Never {
         cam.pitch = 0.20
         print(String(format: "pebwin: rendering %d×%d frame from (%.1f, %.1f, %.1f)…",
                      renderW, renderH, cam.x, cam.y, cam.z))
-        renderWorld(game.world, cam, into: &shotFrame, maxDist: 140)
+        renderWorld(game.world, cam, atlas, into: &shotFrame, maxDist: 140)
         writeBMP(shot, shotFrame)
         print("pebwin: wrote \(shot)")
     }
+    #endif
     print("pebwin: ran \(tick) ticks; sections meshed: \(renderer.sectionCount). Engine ran clean on \(platformName()).")
     platform.shutdown()
     exit(0)

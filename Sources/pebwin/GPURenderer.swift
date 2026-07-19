@@ -30,6 +30,8 @@ final class GPURenderer: Renderer {
     private var pipeline: OpaquePointer?
     private var depthTexture: OpaquePointer?
     private var depthW: Int32 = 0, depthH: Int32 = 0
+    private var atlasTexture: OpaquePointer?
+    private var sampler: OpaquePointer?
     private var sections: [SectionPos: SectionMesh] = [:]
     private(set) var sectionCount = 0
 
@@ -42,11 +44,64 @@ final class GPURenderer: Renderer {
         device = dev
         self.window = window
         buildPipeline()
+        uploadAtlas()
+    }
+
+    // MARK: atlas texture ----------------------------------------------------
+
+    /// Build the engine's atlas and upload it as a 2-D array texture — one 16×16
+    /// RGBA layer per tile, indexed by the tile id packed into vertex word A.
+    private func uploadAtlas() {
+        let atlas = Atlas()
+        let layers = atlas.count
+        var ti = SDL_GPUTextureCreateInfo()
+        ti.type = SDL_GPU_TEXTURETYPE_2D_ARRAY
+        ti.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM
+        ti.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER
+        ti.width = 16; ti.height = 16
+        ti.layer_count_or_depth = UInt32(layers)
+        ti.num_levels = 1
+        guard let tex = SDL_CreateGPUTexture(device, &ti) else { return }
+        atlasTexture = tex
+
+        let blob = atlas.packed()
+        var tci = SDL_GPUTransferBufferCreateInfo(
+            usage: SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, size: UInt32(blob.count), props: 0)
+        guard let tb = SDL_CreateGPUTransferBuffer(device, &tci) else { return }
+        if let map = SDL_MapGPUTransferBuffer(device, tb, false) {
+            blob.withUnsafeBytes { memcpy(map, $0.baseAddress!, blob.count) }
+            SDL_UnmapGPUTransferBuffer(device, tb)
+        }
+        if let cmd = SDL_AcquireGPUCommandBuffer(device), let pass = SDL_BeginGPUCopyPass(cmd) {
+            for layer in 0..<layers {
+                var src = SDL_GPUTextureTransferInfo(
+                    transfer_buffer: tb, offset: UInt32(layer * atlas.tileBytes),
+                    pixels_per_row: 16, rows_per_layer: 16)
+                var dst = SDL_GPUTextureRegion()
+                dst.texture = tex
+                dst.layer = UInt32(layer)
+                dst.w = 16; dst.h = 16; dst.d = 1
+                SDL_UploadToGPUTexture(pass, &src, &dst, false)
+            }
+            SDL_EndGPUCopyPass(pass)
+            _ = SDL_SubmitGPUCommandBuffer(cmd)
+        }
+        SDL_ReleaseGPUTransferBuffer(device, tb)
+
+        var si = SDL_GPUSamplerCreateInfo()
+        si.min_filter = SDL_GPU_FILTER_NEAREST
+        si.mag_filter = SDL_GPU_FILTER_NEAREST
+        si.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST
+        si.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT
+        si.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT
+        si.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT
+        sampler = SDL_CreateGPUSampler(device, &si)
     }
 
     // MARK: pipeline ---------------------------------------------------------
 
-    private func loadShader(_ file: String, stage: SDL_GPUShaderStage, uniformBuffers: UInt32) -> OpaquePointer? {
+    private func loadShader(_ file: String, stage: SDL_GPUShaderStage,
+                            uniformBuffers: UInt32, samplers: UInt32 = 0) -> OpaquePointer? {
         // shaders live beside the executable as compiled SPIR-V (see shaders/README)
         var size = 0
         guard let code = SDL_LoadFile(file, &size) else {
@@ -62,13 +117,14 @@ final class GPURenderer: Renderer {
             info.format = SDL_GPU_SHADERFORMAT_SPIRV
             info.stage = stage
             info.num_uniform_buffers = uniformBuffers
+            info.num_samplers = samplers
             return SDL_CreateGPUShader(device, &info)
         }
     }
 
     private func buildPipeline() {
         guard let vs = loadShader("section.vert.spv", stage: SDL_GPU_SHADERSTAGE_VERTEX, uniformBuffers: 1),
-              let fs = loadShader("section.frag.spv", stage: SDL_GPU_SHADERSTAGE_FRAGMENT, uniformBuffers: 0) else {
+              let fs = loadShader("section.frag.spv", stage: SDL_GPU_SHADERSTAGE_FRAGMENT, uniformBuffers: 0, samplers: 1) else {
             return
         }
         defer { SDL_ReleaseGPUShader(device, vs); SDL_ReleaseGPUShader(device, fs) }
@@ -201,6 +257,10 @@ final class GPURenderer: Renderer {
         withUnsafePointer(to: &color) { cp in
             let pass = SDL_BeginGPURenderPass(cmd, cp, 1, &depth)
             SDL_BindGPUGraphicsPipeline(pass, pipeline)
+            if let atlasTexture, let sampler {
+                var samp = SDL_GPUTextureSamplerBinding(texture: atlasTexture, sampler: sampler)
+                SDL_BindGPUFragmentSamplers(pass, 0, &samp, 1)
+            }
             for m in sections.values {
                 var uni = Uniforms(viewProj: viewProj, origin: m.origin, pad: 0)
                 SDL_PushGPUVertexUniformData(cmd, 0, &uni, UInt32(MemoryLayout<Uniforms>.size))
