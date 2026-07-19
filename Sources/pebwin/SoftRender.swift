@@ -53,18 +53,22 @@ func renderWorld(_ world: World, _ cam: CamState, _ atlas: Atlas, into f: inout 
             let n = 1 / (dx * dx + dy * dy + dz * dz).squareRoot()
             dx *= n; dy *= n; dz *= n
 
-            if let c = castRay(world, atlas, cam.x, cam.y, cam.z, dx, dy, dz, maxDist) {
-                f.set(px, py, c.0, c.1, c.2)
-            } else {
-                let s = mix3(horizon, sky, max(0, min(1, dy * 1.4)))
-                f.set(px, py, s.0, s.1, s.2)
-            }
+            let s = mix3(horizon, sky, max(0, min(1, dy * 1.4)))
+            // castRay returns premultiplied colour + remaining transmittance;
+            // whatever light gets through composites over the sky for this ray.
+            let c = castRay(world, atlas, cam.x, cam.y, cam.z, dx, dy, dz, maxDist, horizon)
+            f.set(px, py, c.0 + c.3 * s.0, c.1 + c.3 * s.1, c.2 + c.3 * s.2)
         }
     }
 }
 
+/// Returns premultiplied colour + remaining transmittance (trans). trans == 1
+/// means the ray saw only sky; an opaque hit drives trans to 0; translucent
+/// blocks (water/glass/ice) accumulate colour and reduce trans as the ray passes
+/// through; cutout blocks (leaves/glass) are alpha-tested per texel.
 private func castRay(_ world: World, _ atlas: Atlas, _ ox: Double, _ oy: Double, _ oz: Double,
-                     _ dx: Double, _ dy: Double, _ dz: Double, _ maxDist: Int) -> (Double, Double, Double)? {
+                     _ dx: Double, _ dy: Double, _ dz: Double, _ maxDist: Int,
+                     _ horizon: (Double, Double, Double)) -> (Double, Double, Double, Double) {
     var ix = Int(ox.rounded(.down)), iy = Int(oy.rounded(.down)), iz = Int(oz.rounded(.down))
     let stepX = dx > 0 ? 1 : -1, stepY = dy > 0 ? 1 : -1, stepZ = dz > 0 ? 1 : -1
     let tDX = dx == 0 ? Double.infinity : abs(1 / dx)
@@ -80,29 +84,51 @@ private func castRay(_ world: World, _ atlas: Atlas, _ ox: Double, _ oy: Double,
 
     var axis = 1
     var travelled = 0.0
+    var accR = 0.0, accG = 0.0, accB = 0.0, trans = 1.0
+
     for _ in 0..<(maxDist * 3) {
         let packed = world.getBlock(ix, iy, iz)
         let id = packed >> 4
         if id > 0 && id < blockDefs.count {
             let def = blockDefs[id]
-            if def.opaque && def.fullCube {
-                let hx = ox + dx * travelled, hy = oy + dy * travelled, hz = oz + dz * travelled
-                let face: Int, u: Double, v: Double, faceShade: Double
-                switch axis {
-                case 1: face = stepY < 0 ? 1 : 0; u = frac(hx); v = frac(hz); faceShade = stepY < 0 ? 1.0 : 0.5
-                case 2: face = stepZ < 0 ? 3 : 2; u = frac(hx); v = 1 - frac(hy); faceShade = 0.80
-                default: face = stepX < 0 ? 5 : 4; u = frac(hz); v = 1 - frac(hy); faceShade = 0.62
-                }
+            let hx = ox + dx * travelled, hy = oy + dy * travelled, hz = oz + dz * travelled
+            let face: Int, u: Double, v: Double, faceShade: Double
+            switch axis {
+            case 1: face = stepY < 0 ? 1 : 0; u = frac(hx); v = frac(hz); faceShade = stepY < 0 ? 1.0 : 0.5
+            case 2: face = stepZ < 0 ? 3 : 2; u = frac(hx); v = 1 - frac(hy); faceShade = 0.80
+            default: face = stepX < 0 ? 5 : 4; u = frac(hz); v = 1 - frac(hy); faceShade = 0.62
+            }
+            // shaded, tinted, fog-blended texel for this face
+            func texel() -> (Double, Double, Double, Double) {
                 let tile = atlas.tile(forCell: packed, face: face)
-                var (r, g, b, _) = atlas.sample(tile, u, v)
+                var (r, g, b, a) = atlas.sample(tile, u, v)
                 let tint = blockTint(def.name, face)
                 r *= tint.0; g *= tint.1; b *= tint.2
-                let ambient = 0.35
-                let lit = ambient + (1 - ambient) * faceShade
-                let fog = max(0, 1 - travelled / Double(maxDist))
-                let horizon = (0.78, 0.86, 0.96)
-                return mix3(horizon, (r * lit, g * lit, b * lit), fog * 0.85 + 0.15)
+                let lit = 0.35 + 0.65 * faceShade
+                let fog = max(0, 1 - travelled / Double(maxDist)) * 0.85 + 0.15
+                let c = mix3(horizon, (r * lit, g * lit, b * lit), fog)
+                return (c.0, c.1, c.2, a)
             }
+
+            if def.translucent {                        // water, ice, stained glass…
+                let (r, g, b, ta) = texel()
+                let a = translucentAlpha(def.name, ta)
+                accR += trans * a * r; accG += trans * a * g; accB += trans * a * b
+                trans *= (1 - a)
+                if trans < 0.05 { break }
+            } else if def.fullCube && def.opaque && !def.transparentRender {   // solid
+                let (r, g, b, _) = texel()
+                accR += trans * r; accG += trans * g; accB += trans * b
+                trans = 0; break
+            } else if def.fullCube && def.transparentRender {                  // cutout
+                let (r, g, b, a) = texel()
+                if a >= 0.5 {
+                    accR += trans * r; accG += trans * g; accB += trans * b
+                    trans = 0; break
+                }
+                // transparent texel — see through the holes
+            }
+            // non-full-cube plants/cross shapes: ray passes through (skipped)
         }
         if tMaxX < tMaxY {
             if tMaxX < tMaxZ { ix += stepX; travelled = tMaxX; tMaxX += tDX; axis = 0 }
@@ -112,7 +138,15 @@ private func castRay(_ world: World, _ atlas: Atlas, _ ox: Double, _ oy: Double,
             else { iz += stepZ; travelled = tMaxZ; tMaxZ += tDZ; axis = 2 }
         }
     }
-    return nil
+    return (accR, accG, accB, trans)
+}
+
+/// Per-class opacity for translucent blocks (the substrate tiles are near-opaque).
+private func translucentAlpha(_ name: String, _ texelAlpha: Double) -> Double {
+    if name == "water" { return 0.62 }
+    if name.contains("ice") { return 0.55 }
+    if name.contains("glass") { return 0.45 }
+    return max(0.4, min(0.85, texelAlpha))
 }
 
 /// Biome-ish tint for the tiles the engine tints at runtime (grass tops, foliage).
@@ -121,6 +155,7 @@ private func blockTint(_ name: String, _ face: Int) -> (Double, Double, Double) 
     if name == "grass_block" { return face == 1 ? (0.45, 0.72, 0.35) : (1, 1, 1) }
     if name.contains("leaves") || name.contains("vine") || name.hasPrefix("grass")
         || name == "fern" || name.contains("moss") { return (0.36, 0.62, 0.30) }
+    if name == "water" { return (0.25, 0.5, 0.92) }
     return (1, 1, 1)
 }
 

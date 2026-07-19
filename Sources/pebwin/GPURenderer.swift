@@ -16,11 +16,11 @@ import Foundation
 import CSDL
 import PebbleCore
 
-/// One section's GPU-resident geometry.
+/// One section's GPU-resident geometry — the opaque and cutout layers (each a
+/// vertex+index buffer). Cutout is drawn with the same pipeline; the shader
+/// alpha-discards. (Translucent needs a separate blend pipeline — a follow-up.)
 private struct SectionMesh {
-    var vbuf: OpaquePointer     // SDL_GPUBuffer (vertices, 28B stride)
-    var ibuf: OpaquePointer     // SDL_GPUBuffer (uint32 indices)
-    var indexCount: Int
+    var layers: [(vbuf: OpaquePointer, ibuf: OpaquePointer, count: Int)]
     var origin: (Float, Float, Float)   // section world origin, added in the shader
 }
 
@@ -192,30 +192,25 @@ final class GPURenderer: Renderer {
     }
 
     func uploadSection(_ cx: Int, _ sy: Int, _ cz: Int, _ minY: Int, _ mesh: MeshOutput) {
-        // skeleton draws the opaque layer only
-        let layer = mesh.opaque
         let key = SectionPos(cx: cx, sy: sy, cz: cz)
         removeSection(key)
-        guard !layer.idx.isEmpty, !layer.data.isEmpty else { return }
-
-        var vbuf: OpaquePointer?
-        var ibuf: OpaquePointer?
-        layer.data.withUnsafeBytes { vb in
-            vbuf = makeBuffer(SDL_GPU_BUFFERUSAGE_VERTEX, vb.baseAddress!, vb.count)
+        var built: [(vbuf: OpaquePointer, ibuf: OpaquePointer, count: Int)] = []
+        for layer in [mesh.opaque, mesh.cutout] {   // translucent needs a blend pipeline
+            guard !layer.idx.isEmpty, !layer.data.isEmpty else { continue }
+            var vbuf: OpaquePointer?, ibuf: OpaquePointer?
+            layer.data.withUnsafeBytes { vb in vbuf = makeBuffer(SDL_GPU_BUFFERUSAGE_VERTEX, vb.baseAddress!, vb.count) }
+            layer.idx.withUnsafeBytes { ib in ibuf = makeBuffer(SDL_GPU_BUFFERUSAGE_INDEX, ib.baseAddress!, ib.count) }
+            if let v = vbuf, let i = ibuf { built.append((v, i, layer.idx.count)) }
         }
-        layer.idx.withUnsafeBytes { ib in
-            ibuf = makeBuffer(SDL_GPU_BUFFERUSAGE_INDEX, ib.baseAddress!, ib.count)
-        }
-        guard let v = vbuf, let i = ibuf else { return }
-        sections[key] = SectionMesh(vbuf: v, ibuf: i, indexCount: layer.idx.count,
+        guard !built.isEmpty else { return }
+        sections[key] = SectionMesh(layers: built,
                                     origin: (Float(cx * 16), Float(minY + sy * 16), Float(cz * 16)))
         sectionCount = sections.count
     }
 
     private func removeSection(_ key: SectionPos) {
         if let m = sections.removeValue(forKey: key) {
-            SDL_ReleaseGPUBuffer(device, m.vbuf)
-            SDL_ReleaseGPUBuffer(device, m.ibuf)
+            for l in m.layers { SDL_ReleaseGPUBuffer(device, l.vbuf); SDL_ReleaseGPUBuffer(device, l.ibuf) }
         }
     }
 
@@ -264,11 +259,13 @@ final class GPURenderer: Renderer {
             for m in sections.values {
                 var uni = Uniforms(viewProj: viewProj, origin: m.origin, pad: 0)
                 SDL_PushGPUVertexUniformData(cmd, 0, &uni, UInt32(MemoryLayout<Uniforms>.size))
-                var vb = SDL_GPUBufferBinding(buffer: m.vbuf, offset: 0)
-                SDL_BindGPUVertexBuffers(pass, 0, &vb, 1)
-                var ib = SDL_GPUBufferBinding(buffer: m.ibuf, offset: 0)
-                SDL_BindGPUIndexBuffer(pass, &ib, SDL_GPU_INDEXELEMENTSIZE_32BIT)
-                SDL_DrawGPUIndexedPrimitives(pass, UInt32(m.indexCount), 1, 0, 0, 0)
+                for l in m.layers {
+                    var vb = SDL_GPUBufferBinding(buffer: l.vbuf, offset: 0)
+                    SDL_BindGPUVertexBuffers(pass, 0, &vb, 1)
+                    var ib = SDL_GPUBufferBinding(buffer: l.ibuf, offset: 0)
+                    SDL_BindGPUIndexBuffer(pass, &ib, SDL_GPU_INDEXELEMENTSIZE_32BIT)
+                    SDL_DrawGPUIndexedPrimitives(pass, UInt32(l.count), 1, 0, 0, 0)
+                }
             }
             SDL_EndGPURenderPass(pass)
         }
