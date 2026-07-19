@@ -1,14 +1,22 @@
 name: CI
 
-# Verifies the portable engine (PebbleCore) and its golden test harness
-# (pebsmoke) build and pass off-Apple. The macOS game app is not built here —
-# it needs a Metal-capable runner; see WINDOWS.md.
+# Verifies the portable engine (PebbleCore) and its headless tools build and
+# pass off-Apple. The macOS game app is not built here — it needs a
+# Metal-capable runner; see WINDOWS.md.
+#
+# Each job: builds the engine, runs the 456-check golden suite, then renders a
+# world map with pebmap and uploads it as an artifact — a downloadable proof
+# that Pebble's worldgen runs on that platform.
 
 on:
   push:
     branches: [main, "claude/**"]
   pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   linux:
@@ -21,6 +29,12 @@ jobs:
         run: swift build -c release
       - name: Golden suite (456 checks)
         run: swift run -c release pebsmoke
+      - name: Render a world map (seed 4242)
+        run: swift run -c release pebmap --seed 4242 --chunks 48 --out pebble-map-linux.bmp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: world-map-linux
+          path: pebble-map-linux.bmp
 
   windows:
     name: Engine + golden suite (Windows)
@@ -35,3 +49,9 @@ jobs:
         run: swift build -c release
       - name: Golden suite (456 checks)
         run: swift run -c release pebsmoke
+      - name: Render a world map (seed 4242)
+        run: swift run -c release pebmap --seed 4242 --chunks 48 --out pebble-map-windows.bmp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: world-map-windows
+          path: pebble-map-windows.bmp

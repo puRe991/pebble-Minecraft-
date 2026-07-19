@@ -48,6 +48,16 @@ var targets: [Target] = [
         path: "Sources/pebsmoke",
         swiftSettings: [.swiftLanguageMode(.v5)]
     ),
+    // headless world-map renderer — drives the real worldgen and writes a
+    // top-down BMP. Portable (PebbleCore + Foundation only), so it runs on
+    // Windows/Linux and is the first thing you can *see* the engine produce
+    // off-Apple. See WINDOWS.md.
+    .executableTarget(
+        name: "pebmap",
+        dependencies: ["PebbleCore"],
+        path: "Sources/pebmap",
+        swiftSettings: [.swiftLanguageMode(.v5)]
+    ),
 ]
 
 // The app is an AppKit + MTKView (Metal) shell — Apple-only. A Windows/Linux
