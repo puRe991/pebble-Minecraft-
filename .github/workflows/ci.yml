@@ -128,33 +128,27 @@ jobs:
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
           Copy-Item ".build\release\pebwin.exe" $dist
           Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\SDL3.dll" $dist
-          # Collect exactly the Swift/Foundation runtime DLLs the exe needs, by
-          # name, from the Swift platform tree (SDK + Runtimes) and swift.exe's
-          # dir. Foundation/dispatch live in the SDK runtime bin, not next to
-          # swift.exe, so search the whole platform once and pick by name.
-          $needed = @(
-            'swiftCore','swiftCRT','swiftWinSDK','swiftSwiftOnoneSupport',
-            'swift_Concurrency','swift_StringProcessing','swift_RegexParser',
-            'swiftSynchronization','swiftDispatch','swiftRegexBuilder','swiftObservation',
-            'Foundation','FoundationEssentials','FoundationInternationalization',
-            '_FoundationICU','_FoundationCShims','dispatch','BlocksRuntime',
-            'vcruntime140','vcruntime140_1','vcruntime140_threads','msvcp140'
-          )
-          $roots = @()
-          if ($env:SDKROOT) { $roots += (Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $env:SDKROOT))) }
-          $roots += (Split-Path (Get-Command swift.exe).Source)
-          $map = @{}
-          foreach ($root in ($roots | Select-Object -Unique)) {
-            if (Test-Path $root) {
-              Get-ChildItem -Path $root -Filter *.dll -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
-                if (-not $map.ContainsKey($_.Name)) { $map[$_.Name] = $_.FullName }
-              }
+          # The exe already runs in CI, so its runtime DLLs are all on PATH. Copy
+          # every DLL from each PATH dir that hosts the Swift/Foundation runtime —
+          # that captures the complete set (swiftCore, Foundation*, dispatch,
+          # ICU, …) without guessing individual names or locations.
+          foreach ($d in ($env:PATH -split ';')) {
+            if ($d -and (Test-Path $d) -and (
+                (Test-Path (Join-Path $d 'swiftCore.dll')) -or
+                (Test-Path (Join-Path $d 'dispatch.dll')) -or
+                (Test-Path (Join-Path $d 'Foundation.dll')) -or
+                (Test-Path (Join-Path $d 'FoundationEssentials.dll')))) {
+              Write-Host "runtime dir: $d"
+              Get-ChildItem "$d\*.dll" | Copy-Item -Destination $dist -Force -ErrorAction SilentlyContinue
             }
           }
-          foreach ($name in $needed) {
-            if ($map.ContainsKey("$name.dll")) { Copy-Item $map["$name.dll"] -Destination $dist -Force }
-            else { Write-Host "note: $name.dll not found" }
+          # VC runtime (usually already present on Windows; bundle if resolvable)
+          $vc = (& where.exe vcruntime140.dll 2>$null | Select-Object -First 1)
+          if ($vc) {
+            $vcdir = Split-Path $vc.Trim()
+            Copy-Item "$vcdir\vcruntime140*.dll","$vcdir\msvcp140*.dll" -Destination $dist -Force -ErrorAction SilentlyContinue
           }
+          Get-ChildItem $dist | Select-Object Name, Length
           "@echo off`r`nstart """" pebwin.exe --window`r`n" | Out-File -Encoding ascii "$dist\play.bat"
           @"
           Pebble for Windows (preview build)
@@ -170,3 +164,16 @@ jobs:
         with:
           name: pebble-windows-exe
           path: pebble-windows
+      - name: Smoke-test the packaged exe (isolated PATH)
+        shell: pwsh
+        run: |
+          # run with only the dist folder + Windows system dirs on PATH, so the
+          # bundled DLLs are the only Swift/SDL runtime available — proves the
+          # package is self-contained.
+          $dist = (Resolve-Path pebble-windows).Path
+          $env:PATH = "$dist;$env:SystemRoot\System32;$env:SystemRoot"
+          Push-Location $dist
+          & ".\pebwin.exe" --seed 1 --ticks 5 --shot smoke.bmp
+          Pop-Location
+          if (Test-Path "$dist\smoke.bmp") { Write-Host "OK: the packaged exe ran standalone and wrote smoke.bmp" }
+          else { Write-Error "the packaged exe did not run standalone"; exit 1 }
