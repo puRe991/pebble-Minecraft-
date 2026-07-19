@@ -10,7 +10,16 @@
 // regenerate terrain from seed and re-attach saved entities.
 
 import Foundation
+
+// Apple exposes SQLite as the `SQLite3` system module; on other platforms we
+// build the vendored SQLite amalgamation through the `CSQLite` target (see
+// Package.swift and Sources/CSQLite/). The C API is identical either way, so
+// nothing below changes.
+#if canImport(SQLite3)
 import SQLite3
+#else
+import CSQLite
+#endif
 
 public struct DimState: Codable {
     public var time: Int

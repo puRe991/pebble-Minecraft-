@@ -3,7 +3,9 @@
 // bit-for-bit so worldgen seeds carry over across releases.
 
 import Foundation
-import simd
+#if canImport(simd)
+import simd  // only for SIMD3<Float>, which is stdlib elsewhere
+#endif
 import PebbleCore
 
 var passed = 0

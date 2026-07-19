@@ -3,7 +3,65 @@
 // the projection/frustum forms adjusted from GL to Metal conventions.
 
 import Foundation
+
+// Apple ships the `simd` module; other platforms (Windows/Linux) don't. The
+// engine only leans on a small, well-defined slice of it, so on non-Apple
+// platforms we reimplement exactly that slice in pure Swift over the stdlib
+// SIMD types. The Apple path below is byte-for-byte the original — this shim is
+// compiled *only* where `simd` is unavailable, so the macOS build is untouched.
+#if canImport(simd)
 import simd
+#else
+@inline(__always) func simd_dot(_ a: SIMD3<Double>, _ b: SIMD3<Double>) -> Double { a.x * b.x + a.y * b.y + a.z * b.z }
+@inline(__always) func simd_dot(_ a: SIMD3<Float>,  _ b: SIMD3<Float>)  -> Float  { a.x * b.x + a.y * b.y + a.z * b.z }
+@inline(__always) func simd_length_squared(_ a: SIMD3<Double>) -> Double { simd_dot(a, a) }
+@inline(__always) func simd_length(_ a: SIMD3<Double>) -> Double { simd_length_squared(a).squareRoot() }
+@inline(__always) func simd_length(_ a: SIMD3<Float>)  -> Float  { simd_dot(a, a).squareRoot() }
+@inline(__always) func simd_distance(_ a: SIMD3<Double>, _ b: SIMD3<Double>) -> Double { simd_length(a - b) }
+@inline(__always) func simd_distance_squared(_ a: SIMD3<Double>, _ b: SIMD3<Double>) -> Double { simd_length_squared(a - b) }
+@inline(__always) func simd_cross(_ a: SIMD3<Double>, _ b: SIMD3<Double>) -> SIMD3<Double> {
+    SIMD3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x)
+}
+@inline(__always) func simd_cross(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> SIMD3<Float> {
+    SIMD3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x)
+}
+@inline(__always) func simd_normalize(_ a: SIMD3<Float>) -> SIMD3<Float> {
+    let l = simd_length(a); return l > 0 ? a / l : a
+}
+
+/// Column-major 4×4 float matrix — the subset of `simd_float4x4`'s API the
+/// engine uses (`init(_ diagonal:)`, `init(columns:)`, column subscript get/set).
+public struct simd_float4x4 {
+    public var columns: (SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>)
+    @inline(__always) public init(_ diagonal: Float) {
+        columns = (SIMD4(diagonal, 0, 0, 0), SIMD4(0, diagonal, 0, 0),
+                   SIMD4(0, 0, diagonal, 0), SIMD4(0, 0, 0, diagonal))
+    }
+    @inline(__always) public init(columns: (SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>)) {
+        self.columns = columns
+    }
+    @inline(__always) public subscript(_ i: Int) -> SIMD4<Float> {
+        get { switch i { case 0: return columns.0; case 1: return columns.1; case 2: return columns.2; default: return columns.3 } }
+        set { switch i { case 0: columns.0 = newValue; case 1: columns.1 = newValue; case 2: columns.2 = newValue; default: columns.3 = newValue } }
+    }
+    /// matrix × column-vector (column-major: result = Σ colᵢ · vᵢ)
+    @inline(__always) public static func * (m: simd_float4x4, v: SIMD4<Float>) -> SIMD4<Float> {
+        m.columns.0 * v.x + m.columns.1 * v.y + m.columns.2 * v.z + m.columns.3 * v.w
+    }
+    /// matrix × matrix (each result column is `a` applied to a column of `b`)
+    @inline(__always) public static func * (a: simd_float4x4, b: simd_float4x4) -> simd_float4x4 {
+        simd_float4x4(columns: (a * b.columns.0, a * b.columns.1, a * b.columns.2, a * b.columns.3))
+    }
+}
+public let matrix_identity_float4x4 = simd_float4x4(1)
+#endif
+
+// ---- clock -------------------------------------------------------------------
+/// Wall-clock seconds since the 2001 reference epoch. Identical in value to the
+/// old `CFAbsoluteTimeGetCurrent()` but available off-Apple, where CoreFoundation
+/// isn't. Used only for real-time pacing/profiling — never in the deterministic
+/// sim, so it does not affect goldens.
+@inline(__always) public func nowSeconds() -> Double { Date().timeIntervalSinceReferenceDate }
 
 // ---- scalars -----------------------------------------------------------------
 @inline(__always) public func clampD(_ x: Double, _ lo: Double, _ hi: Double) -> Double { x < lo ? lo : (x > hi ? hi : x) }

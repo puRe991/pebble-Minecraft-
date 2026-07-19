@@ -1,0 +1,13 @@
+// Binds system SDL3 for the desktop front-end. Only pulled in when the package
+// is configured with PEBBLE_SDL=1 (see Package.swift); the default build and CI
+// never reference it and need no SDL installed.
+//
+// Provide SDL3 dev files on the compiler's search path:
+//   Windows: vcpkg install sdl3   (or the SDL3 devel release)
+//   Linux:   apt install libsdl3-dev   (or build from source)
+//   macOS:   brew install sdl3
+module CSDL {
+    header "shim.h"
+    link "SDL3"
+    export *
+}
