@@ -1,17 +1,16 @@
 // pebwin — the cross-platform (Windows/Linux) desktop front-end for Pebble.
 //
 // It boots the real PebbleCore engine, wires it to a Platform (window/input) and
-// a Renderer, and runs the game loop. With no flags it runs HEADLESS: it creates
-// a world and ticks the full simulation — worldgen, physics, entity AI, lighting,
-// meshing — reporting progress, then exits. That is the proof the entire game
-// runs on this OS. Built with PEBBLE_SDL (and SDL3 installed) it opens a real
-// window with input wired into the engine; the 3D voxel renderer that turns the
-// engine's section meshes into pixels is the remaining piece (see Renderer.swift
-// and WINDOWS.md).
+// the CPU voxel renderer (SoftRender.swift), and runs the game loop.
 //
-//   swift run pebwin                       # headless: boot + tick a world, report
-//   swift run pebwin --seed 1234 --ticks 400
-//   PEBBLE_SDL=1 swift build && swift run pebwin --window   # desktop window (needs SDL3)
+//   swift run pebwin                              # headless: boot + tick a world, report
+//   swift run pebwin --shot view.bmp --ticks 300  # + render a first-person frame to BMP
+//   PEBBLE_SDL=1 swift run pebwin --window         # a real, playable window (needs SDL3)
+//
+// The headless `--shot` path is what CI uses to prove — with no GPU and no
+// display — that a first-person 3-D view of the generated world renders on
+// Windows. The SDL window uses the exact same renderer in real time, with WASD +
+// mouse wired into the engine, which is what makes it playable on a desktop.
 
 import Foundation
 import PebbleCore
@@ -20,6 +19,8 @@ import PebbleCore
 var seed = "4242"
 var maxTicks = 200
 var wantWindow = false
+var shotPath: String? = nil
+var renderW = 480, renderH = 270
 do {
     let a = CommandLine.arguments
     var i = 1
@@ -27,9 +28,12 @@ do {
         switch a[i] {
         case "--seed":  if i + 1 < a.count { seed = a[i + 1]; i += 1 }
         case "--ticks": if i + 1 < a.count { maxTicks = Int(a[i + 1]) ?? maxTicks; i += 1 }
+        case "--shot":  if i + 1 < a.count { shotPath = a[i + 1]; i += 1 }
+        case "--width":  if i + 1 < a.count { renderW = Int(a[i + 1]) ?? renderW; i += 1 }
+        case "--height": if i + 1 < a.count { renderH = Int(a[i + 1]) ?? renderH; i += 1 }
         case "--window": wantWindow = true
         case "-h", "--help":
-            print("usage: pebwin [--seed S] [--ticks N] [--window]")
+            print("usage: pebwin [--seed S] [--ticks N] [--shot FILE.bmp] [--width W --height H] [--window]")
             exit(0)
         default: break
         }
@@ -38,7 +42,7 @@ do {
 }
 
 // ---- assemble the front-end --------------------------------------------------
-let renderer: Renderer = NullRenderer()
+let renderer: Renderer = NullRenderer()   // mesh accounting; the view is raycast
 let audio: AudioSink = NullAudio()
 let host = FrontendHost(renderer: renderer, audio: audio)
 
@@ -47,6 +51,7 @@ var platform: Platform = HeadlessPlatform()
 if wantWindow {
     if let sdl = SDLPlatform(width: 1280, height: 720, title: "Pebble") {
         platform = sdl
+        (renderW, renderH) = sdl.renderSize
     } else {
         print("pebwin: SDL init failed — falling back to headless")
     }
@@ -58,26 +63,28 @@ if wantWindow {
 #endif
 
 // ---- boot the engine ---------------------------------------------------------
-// GameCore.init() registers every block/item/biome/recipe/entity/system.
-let game = GameCore()
+let game = GameCore()               // registers every block/item/biome/entity/system
 game.host = host
 game.createWorld(name: "pebwin", seedText: seed, mode: GameMode.survival, difficulty: 2)
 print("pebwin: booted overworld (seed \(seed)) on \(platformName()); ticking the real sim…")
 
-// ---- the game loop -----------------------------------------------------------
-// Driven off the main dispatch queue so the engine's chunk-publish callbacks
-// (GameCore uses DispatchQueue.main.async → adoptChunk) are serviced between
-// frames. Headless runs fast-forward; the SDL path would pace to real time.
 let startClock = nowSeconds()
 var tick = 0
+var frame = RGBFrame(max(1, renderW), max(1, renderH))
+
+func renderAndPresent() {
+    guard game.hasWorld(), platform.renderSize.0 > 0 else { return }
+    let cam = game.camState(1, timeSec: nowSeconds() - startClock)
+    renderWorld(game.world, cam, into: &frame)
+    platform.present(frame)
+}
 
 func stepOnce() {
     for ev in platform.poll() {
         switch ev {
         case .quit: finish()
         case let .key(code, down, ctrl):
-            if down { game.keyDown(code, now: nowSeconds() * 1000, ctrlOrCmd: ctrl) }
-            else { game.keyUp(code) }
+            if down { game.keyDown(code, now: nowSeconds() * 1000, ctrlOrCmd: ctrl) } else { game.keyUp(code) }
         case let .mouseButton(button, down):
             if down { game.mouseDown(button) } else { game.mouseUp(button) }
         case let .mouseDelta(dx, dy): game.mouseDelta(dx, dy)
@@ -85,13 +92,8 @@ func stepOnce() {
         }
     }
 
-    let partial = game.frame(dtMs: 50)
-
-    if game.hasWorld() {
-        let cam = game.camState(partial, timeSec: nowSeconds() - startClock)
-        renderer.draw(cam, partial: partial)
-    }
-    platform.present()
+    _ = game.frame(dtMs: 50)
+    renderAndPresent()
 
     tick += 1
     if tick % 20 == 0, let p = game.player {
@@ -104,6 +106,17 @@ func stepOnce() {
 }
 
 func finish() -> Never {
+    // headless screenshot: render one first-person frame of the real world
+    if let shot = shotPath, game.hasWorld() {
+        var shotFrame = RGBFrame(renderW, renderH)
+        game.player?.pitch = 0.32   // tilt slightly down so the landscape frames well
+        let cam = game.camState(1, timeSec: nowSeconds() - startClock)
+        print(String(format: "pebwin: rendering %d×%d frame from (%.1f, %.1f, %.1f)…",
+                     renderW, renderH, cam.x, cam.y, cam.z))
+        renderWorld(game.world, cam, into: &shotFrame)
+        writeBMP(shot, shotFrame)
+        print("pebwin: wrote \(shot)")
+    }
     print("pebwin: ran \(tick) ticks; sections meshed: \(renderer.sectionCount). Engine ran clean on \(platformName()).")
     platform.shutdown()
     exit(0)

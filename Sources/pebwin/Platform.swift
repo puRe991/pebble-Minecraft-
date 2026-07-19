@@ -23,8 +23,10 @@ enum FrontendEvent {
 protocol Platform: AnyObject {
     /// Drain and translate this frame's OS events.
     func poll() -> [FrontendEvent]
-    /// Present the frame the renderer just drew (swap buffers). Headless: no-op.
-    func present()
+    /// Present a software-rendered frame to the window. Headless: no-op.
+    func present(_ frame: RGBFrame)
+    /// The render resolution to fill (window backing size). 0×0 = headless.
+    var renderSize: (Int, Int) { get }
     /// True once the user asked to close the window.
     var shouldClose: Bool { get }
     func shutdown()
@@ -33,7 +35,8 @@ protocol Platform: AnyObject {
 /// No window — the sim runs to completion and reports. This is the CI path.
 final class HeadlessPlatform: Platform {
     func poll() -> [FrontendEvent] { [] }
-    func present() {}
+    func present(_ frame: RGBFrame) {}
+    var renderSize: (Int, Int) { (0, 0) }
     var shouldClose: Bool { false }
     func shutdown() {}
 }

@@ -17,6 +17,8 @@ import PebbleCore
 final class SDLPlatform: Platform {
     private let window: OpaquePointer
     private let renderer: OpaquePointer
+    private let texture: OpaquePointer
+    private let rw: Int32 = 480, rh: Int32 = 270   // software render resolution, scaled to the window
     private var closing = false
 
     init?(width: Int, height: Int, title: String) {
@@ -27,12 +29,19 @@ final class SDLPlatform: Platform {
         guard let ren = SDL_CreateRenderer(win, nil) else {
             SDL_DestroyWindow(win); SDL_Quit(); return nil
         }
+        // a streaming texture the CPU renderer writes into each frame
+        guard let tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24,
+                                          SDL_TEXTUREACCESS_STREAMING, rw, rh) else {
+            SDL_DestroyRenderer(ren); SDL_DestroyWindow(win); SDL_Quit(); return nil
+        }
         window = win
         renderer = ren
+        texture = tex
         // relative mouse mode = FPS-style look (raw deltas, cursor hidden)
         _ = SDL_SetWindowRelativeMouseMode(window, true)
     }
 
+    var renderSize: (Int, Int) { (Int(rw), Int(rh)) }
     var shouldClose: Bool { closing }
 
     func poll() -> [FrontendEvent] {
@@ -60,14 +69,18 @@ final class SDLPlatform: Platform {
         return out
     }
 
-    func present() {
-        // placeholder: clear to sky blue until the voxel renderer lands
-        _ = SDL_SetRenderDrawColor(renderer, 122, 168, 255, 255)
+    func present(_ frame: RGBFrame) {
+        // upload the CPU framebuffer and blit it scaled to the window
+        frame.px.withUnsafeBytes { raw in
+            _ = SDL_UpdateTexture(texture, nil, raw.baseAddress, rw * 3)
+        }
         _ = SDL_RenderClear(renderer)
+        _ = SDL_RenderTexture(renderer, texture, nil, nil)
         _ = SDL_RenderPresent(renderer)
     }
 
     func shutdown() {
+        SDL_DestroyTexture(texture)
         SDL_DestroyRenderer(renderer)
         SDL_DestroyWindow(window)
         SDL_Quit()
