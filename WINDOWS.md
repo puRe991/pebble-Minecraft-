@@ -67,13 +67,12 @@ top-down shaded-relief BMP — no window, no Metal, no Apple frameworks. It is t
 first thing you can *see* the engine produce off-Apple, and because the engine
 is deterministic the same seed yields a byte-identical map on every platform.
 
-> **Verification status:** these portability changes have not yet been compiled
-> against a real Swift-for-Windows toolchain (none was available in the
-> environment they were authored in). They are guard-isolated so the macOS build
-> is unaffected; the off-Apple paths follow standard SwiftPM patterns but should
-> be treated as *unverified* until someone runs the two commands above. If the
-> golden suite prints `456 passed, 0 failed` on Windows, the engine's
-> cross-platform determinism is proven end-to-end.
+> **Verification status:** ✅ verified in CI. The engine builds and the 456-check
+> golden suite passes on both **Windows** (windows-latest) and **Linux**, and
+> `pebmap` renders a world on each — see the CI runs and the uploaded
+> `world-map-windows` / `world-map-linux` artifacts. The macOS build is
+> unaffected (both bindings are `#if`-guarded). CI builds in debug for fast
+> iteration; a release build (`-c release`) also works and is what you'd ship.
 
 ## What a *playable* Windows build still needs
 
@@ -112,9 +111,10 @@ bloom, the single-draw-call UI canvas) all has to be reproduced.
 ## Suggested milestones
 
 1. ✅ **Engine compiles off-Apple** — this change set.
-2. **Green test suite on Windows** — run `pebsmoke`, confirm `456 passed`.
-   Proves the determinism contract holds on Windows. Wired into CI
-   (`.github/workflows/ci.yml`) on both Linux and Windows.
+2. ✅ **Green test suite on Windows** — the 456-check golden suite passes on
+   both Windows and Linux in CI (`.github/workflows/ci.yml`), proving the
+   determinism contract holds off-Apple. (The same seed even renders a
+   byte-for-byte-equivalent world map on both platforms.)
 3. ✅ **Headless world-gen tool** — `pebmap` generates a world and writes a
    top-down BMP. No realtime renderer needed; validates the engine visually on
    Windows. CI renders one each run and uploads it as an artifact.
