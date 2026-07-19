@@ -20,7 +20,7 @@ final class SDLPlatform: Platform {
     private var closing = false
     #if !PEBBLE_GPU
     private let sdlRenderer: OpaquePointer
-    private let texture: OpaquePointer
+    private let texture: UnsafeMutablePointer<SDL_Texture>   // SDL3 makes SDL_Texture a public struct
     private let rw: Int32 = 480, rh: Int32 = 270   // software render resolution, scaled to the window
     #endif
 
