@@ -8,8 +8,9 @@ next to the executable. SDL_gpu accepts SPIR-V (Vulkan), DXIL (D3D12), or MSL
 Compile with the Vulkan SDK's `glslc`:
 
 ```sh
-glslc -fshader-stage=vert section.vert.glsl -o section.vert.spv
-glslc -fshader-stage=frag section.frag.glsl -o section.frag.spv
+glslc -fshader-stage=vert section.vert.glsl       -o section.vert.spv
+glslc -fshader-stage=frag section.frag.glsl       -o section.frag.spv
+glslc -fshader-stage=frag section_blend.frag.glsl -o section_blend.frag.spv   # translucent pass
 # then run pebwin from a directory containing the .spv files
 ```
 

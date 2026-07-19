@@ -20,7 +20,8 @@ import PebbleCore
 /// vertex+index buffer). Cutout is drawn with the same pipeline; the shader
 /// alpha-discards. (Translucent needs a separate blend pipeline — a follow-up.)
 private struct SectionMesh {
-    var layers: [(vbuf: OpaquePointer, ibuf: OpaquePointer, count: Int)]
+    var layers: [(vbuf: OpaquePointer, ibuf: OpaquePointer, count: Int)]        // opaque + cutout
+    var translucent: [(vbuf: OpaquePointer, ibuf: OpaquePointer, count: Int)]   // water/glass
     var origin: (Float, Float, Float)   // section world origin, added in the shader
 }
 
@@ -28,6 +29,7 @@ final class GPURenderer: Renderer {
     private let device: OpaquePointer
     private let window: OpaquePointer
     private var pipeline: OpaquePointer?
+    private var translucentPipeline: OpaquePointer?
     private var depthTexture: OpaquePointer?
     private var depthW: Int32 = 0, depthH: Int32 = 0
     private var atlasTexture: OpaquePointer?
@@ -127,7 +129,12 @@ final class GPURenderer: Renderer {
               let fs = loadShader("section.frag.spv", stage: SDL_GPU_SHADERSTAGE_FRAGMENT, uniformBuffers: 0, samplers: 1) else {
             return
         }
-        defer { SDL_ReleaseGPUShader(device, vs); SDL_ReleaseGPUShader(device, fs) }
+        // blend pass uses a fragment shader that keeps alpha (no discard)
+        let fsBlend = loadShader("section_blend.frag.spv", stage: SDL_GPU_SHADERSTAGE_FRAGMENT, uniformBuffers: 0, samplers: 1)
+        defer {
+            SDL_ReleaseGPUShader(device, vs); SDL_ReleaseGPUShader(device, fs)
+            if let fsBlend { SDL_ReleaseGPUShader(device, fsBlend) }
+        }
 
         // vertex layout: float3 pos @0, float2 uv @12, uint A @20, uint B @24 (stride 28)
         let attrs = [
@@ -139,30 +146,44 @@ final class GPURenderer: Renderer {
         let vbDesc = SDL_GPUVertexBufferDescription(
             slot: 0, pitch: 28, input_rate: SDL_GPU_VERTEXINPUTRATE_VERTEX, instance_step_rate: 0)
 
+        // Two pipelines from the same shaders: opaque (depth write) and a
+        // translucent one (alpha blend, no depth write) for the water/glass pass.
         attrs.withUnsafeBufferPointer { ap in
             withUnsafePointer(to: vbDesc) { vb in
-                var target = SDL_GPUColorTargetDescription()
-                target.format = SDL_GetGPUSwapchainTextureFormat(device, window)
-
-                withUnsafePointer(to: target) { tp in
-                    var info = SDL_GPUGraphicsPipelineCreateInfo()
-                    info.vertex_shader = vs
-                    info.fragment_shader = fs
-                    info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST
-                    info.vertex_input_state = SDL_GPUVertexInputState(
-                        vertex_buffer_descriptions: vb, num_vertex_buffers: 1,
-                        vertex_attributes: ap.baseAddress, num_vertex_attributes: 4)
-                    info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_BACK
-                    info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE
-                    info.depth_stencil_state.enable_depth_test = true
-                    info.depth_stencil_state.enable_depth_write = true
-                    info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS
-                    info.target_info.color_target_descriptions = tp
-                    info.target_info.num_color_targets = 1
-                    info.target_info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D24_UNORM
-                    info.target_info.has_depth_stencil_target = true
-                    pipeline = SDL_CreateGPUGraphicsPipeline(device, &info)
+                func make(blend: Bool, fs frag: OpaquePointer) -> OpaquePointer? {
+                    var target = SDL_GPUColorTargetDescription()
+                    target.format = SDL_GetGPUSwapchainTextureFormat(device, window)
+                    if blend {
+                        target.blend_state.enable_blend = true
+                        target.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA
+                        target.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA
+                        target.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD
+                        target.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE
+                        target.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA
+                        target.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD
+                    }
+                    return withUnsafePointer(to: target) { tp -> OpaquePointer? in
+                        var info = SDL_GPUGraphicsPipelineCreateInfo()
+                        info.vertex_shader = vs
+                        info.fragment_shader = frag
+                        info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST
+                        info.vertex_input_state = SDL_GPUVertexInputState(
+                            vertex_buffer_descriptions: vb, num_vertex_buffers: 1,
+                            vertex_attributes: ap.baseAddress, num_vertex_attributes: 4)
+                        info.rasterizer_state.cull_mode = blend ? SDL_GPU_CULLMODE_NONE : SDL_GPU_CULLMODE_BACK
+                        info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE
+                        info.depth_stencil_state.enable_depth_test = true
+                        info.depth_stencil_state.enable_depth_write = !blend
+                        info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS
+                        info.target_info.color_target_descriptions = tp
+                        info.target_info.num_color_targets = 1
+                        info.target_info.depth_stencil_format = SDL_GPU_TEXTUREFORMAT_D24_UNORM
+                        info.target_info.has_depth_stencil_target = true
+                        return SDL_CreateGPUGraphicsPipeline(device, &info)
+                    }
                 }
+                pipeline = make(blend: false, fs: fs)
+                if let fsBlend { translucentPipeline = make(blend: true, fs: fsBlend) }
             }
         }
         if pipeline == nil { print("gpu: pipeline creation failed") }
@@ -194,16 +215,21 @@ final class GPURenderer: Renderer {
     func uploadSection(_ cx: Int, _ sy: Int, _ cz: Int, _ minY: Int, _ mesh: MeshOutput) {
         let key = SectionPos(cx: cx, sy: sy, cz: cz)
         removeSection(key)
-        var built: [(vbuf: OpaquePointer, ibuf: OpaquePointer, count: Int)] = []
-        for layer in [mesh.opaque, mesh.cutout] {   // translucent needs a blend pipeline
-            guard !layer.idx.isEmpty, !layer.data.isEmpty else { continue }
+        func buffers(_ layer: MeshLayer) -> (OpaquePointer, OpaquePointer, Int)? {
+            guard !layer.idx.isEmpty, !layer.data.isEmpty else { return nil }
             var vbuf: OpaquePointer?, ibuf: OpaquePointer?
             layer.data.withUnsafeBytes { vb in vbuf = makeBuffer(SDL_GPU_BUFFERUSAGE_VERTEX, vb.baseAddress!, vb.count) }
             layer.idx.withUnsafeBytes { ib in ibuf = makeBuffer(SDL_GPU_BUFFERUSAGE_INDEX, ib.baseAddress!, ib.count) }
-            if let v = vbuf, let i = ibuf { built.append((v, i, layer.idx.count)) }
+            guard let v = vbuf, let i = ibuf else { return nil }
+            return (v, i, layer.idx.count)
         }
-        guard !built.isEmpty else { return }
-        sections[key] = SectionMesh(layers: built,
+        var solid: [(vbuf: OpaquePointer, ibuf: OpaquePointer, count: Int)] = []
+        if let o = buffers(mesh.opaque) { solid.append(o) }
+        if let c = buffers(mesh.cutout) { solid.append(c) }
+        var trans: [(vbuf: OpaquePointer, ibuf: OpaquePointer, count: Int)] = []
+        if let t = buffers(mesh.translucent) { trans.append(t) }
+        guard !solid.isEmpty || !trans.isEmpty else { return }
+        sections[key] = SectionMesh(layers: solid, translucent: trans,
                                     origin: (Float(cx * 16), Float(minY + sy * 16), Float(cz * 16)))
         sectionCount = sections.count
     }
@@ -211,6 +237,7 @@ final class GPURenderer: Renderer {
     private func removeSection(_ key: SectionPos) {
         if let m = sections.removeValue(forKey: key) {
             for l in m.layers { SDL_ReleaseGPUBuffer(device, l.vbuf); SDL_ReleaseGPUBuffer(device, l.ibuf) }
+            for l in m.translucent { SDL_ReleaseGPUBuffer(device, l.vbuf); SDL_ReleaseGPUBuffer(device, l.ibuf) }
         }
     }
 
@@ -251,30 +278,49 @@ final class GPURenderer: Renderer {
 
         withUnsafePointer(to: &color) { cp in
             let pass = SDL_BeginGPURenderPass(cmd, cp, 1, &depth)
+            bindSampler(pass)
+            // opaque + cutout, then the translucent (alpha-blended) pass
             SDL_BindGPUGraphicsPipeline(pass, pipeline)
-            if let atlasTexture, let sampler {
-                var samp = SDL_GPUTextureSamplerBinding(texture: atlasTexture, sampler: sampler)
-                SDL_BindGPUFragmentSamplers(pass, 0, &samp, 1)
-            }
-            for m in sections.values {
-                var uni = Uniforms(viewProj: viewProj, origin: m.origin, pad: 0)
-                SDL_PushGPUVertexUniformData(cmd, 0, &uni, UInt32(MemoryLayout<Uniforms>.size))
-                for l in m.layers {
-                    var vb = SDL_GPUBufferBinding(buffer: l.vbuf, offset: 0)
-                    SDL_BindGPUVertexBuffers(pass, 0, &vb, 1)
-                    var ib = SDL_GPUBufferBinding(buffer: l.ibuf, offset: 0)
-                    SDL_BindGPUIndexBuffer(pass, &ib, SDL_GPU_INDEXELEMENTSIZE_32BIT)
-                    SDL_DrawGPUIndexedPrimitives(pass, UInt32(l.count), 1, 0, 0, 0)
-                }
+            for m in sections.values { drawLayers(pass, cmd, m.layers, viewProj, m.origin) }
+            if let translucentPipeline {
+                SDL_BindGPUGraphicsPipeline(pass, translucentPipeline)
+                bindSampler(pass)
+                for m in sections.values { drawLayers(pass, cmd, m.translucent, viewProj, m.origin) }
             }
             SDL_EndGPURenderPass(pass)
         }
         _ = SDL_SubmitGPUCommandBuffer(cmd)
     }
 
-    private struct Uniforms { var viewProj: (Float, Float, Float, Float, Float, Float, Float, Float,
-                                             Float, Float, Float, Float, Float, Float, Float, Float)
-                              var origin: (Float, Float, Float); var pad: Float }
+    private func bindSampler(_ pass: OpaquePointer?) {
+        if let atlasTexture, let sampler {
+            var samp = SDL_GPUTextureSamplerBinding(texture: atlasTexture, sampler: sampler)
+            SDL_BindGPUFragmentSamplers(pass, 0, &samp, 1)
+        }
+    }
+
+    private func drawLayers(_ pass: OpaquePointer?, _ cmd: OpaquePointer?,
+                            _ layers: [(vbuf: OpaquePointer, ibuf: OpaquePointer, count: Int)],
+                            _ viewProj: Uniforms.Mat, _ origin: (Float, Float, Float)) {
+        guard !layers.isEmpty else { return }
+        var uni = Uniforms(viewProj: viewProj, origin: origin, pad: 0)
+        SDL_PushGPUVertexUniformData(cmd, 0, &uni, UInt32(MemoryLayout<Uniforms>.size))
+        for l in layers {
+            var vb = SDL_GPUBufferBinding(buffer: l.vbuf, offset: 0)
+            SDL_BindGPUVertexBuffers(pass, 0, &vb, 1)
+            var ib = SDL_GPUBufferBinding(buffer: l.ibuf, offset: 0)
+            SDL_BindGPUIndexBuffer(pass, &ib, SDL_GPU_INDEXELEMENTSIZE_32BIT)
+            SDL_DrawGPUIndexedPrimitives(pass, UInt32(l.count), 1, 0, 0, 0)
+        }
+    }
+
+    private struct Uniforms {
+        typealias Mat = (Float, Float, Float, Float, Float, Float, Float, Float,
+                         Float, Float, Float, Float, Float, Float, Float, Float)
+        var viewProj: Mat
+        var origin: (Float, Float, Float)
+        var pad: Float
+    }
 
     private func ensureDepth(_ w: Int32, _ h: Int32) {
         if depthTexture != nil && depthW == w && depthH == h { return }
@@ -290,8 +336,7 @@ final class GPURenderer: Renderer {
     }
 
     /// column-major view-projection, matching MathX's Metal-convention helpers.
-    private func makeViewProj(_ cam: CamState, aspect: Float) -> (Float, Float, Float, Float, Float, Float, Float, Float,
-                                                                  Float, Float, Float, Float, Float, Float, Float, Float) {
+    private func makeViewProj(_ cam: CamState, aspect: Float) -> Uniforms.Mat {
         let proj = mat4Perspective(fovYRad: Float(cam.fov * .pi / 180), aspect: aspect, near: 0.05, far: 512)
         let dir = SIMD3<Float>(Float(cos(cam.pitch) * -sin(cam.yaw)),
                                Float(-sin(cam.pitch)),
