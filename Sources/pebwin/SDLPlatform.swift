@@ -1,13 +1,14 @@
 // SDLPlatform — the desktop window/input path, built only when PEBBLE_SDL is set
-// (and SDL3 dev libraries are on the compiler's search path). It is intentionally
-// excluded from the default build / CI, which have no SDL and run headless.
+// (and SDL3 dev libraries are on the compiler's search path). Excluded from the
+// default build / CI, which have no SDL and run headless.
 //
-// What it does today: opens a real SDL3 window, captures the mouse, and
-// translates keyboard/mouse events into the engine's vocabulary so movement,
-// looking, and clicking drive the real GameCore. What it does NOT do yet: draw
-// the world — it presents a clear color. The 3D voxel renderer (turning the
-// engine's section meshes into pixels via SDL_GPU / Vulkan / D3D12) is the
-// remaining milestone; see Renderer.swift and WINDOWS.md.
+// Two presentation modes:
+//   • default (CPU renderer): creates an SDL_Renderer + streaming texture and
+//     blits the software framebuffer each frame.
+//   • PEBBLE_GPU: creates only the window; GPURenderer claims it for SDL_gpu and
+//     draws directly, so present() is a no-op here.
+//
+// Input (keyboard/mouse) is translated to the engine's vocabulary in both modes.
 
 #if PEBBLE_SDL
 import Foundation
@@ -15,33 +16,47 @@ import CSDL
 import PebbleCore
 
 final class SDLPlatform: Platform {
-    private let window: OpaquePointer
-    private let renderer: OpaquePointer
+    let sdlWindow: OpaquePointer
+    private var closing = false
+    #if !PEBBLE_GPU
+    private let sdlRenderer: OpaquePointer
     private let texture: OpaquePointer
     private let rw: Int32 = 480, rh: Int32 = 270   // software render resolution, scaled to the window
-    private var closing = false
+    #endif
 
     init?(width: Int, height: Int, title: String) {
         guard SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) else { return nil }
-        guard let win = title.withCString({ SDL_CreateWindow($0, Int32(width), Int32(height), 0) }) else {
+        var flags: SDL_WindowFlags = 0
+        #if PEBBLE_GPU
+        flags = SDL_WindowFlags(0x0000000010000000)   // SDL_WINDOW_VULKAN (macro not importable)
+        #endif
+        guard let win = title.withCString({ SDL_CreateWindow($0, Int32(width), Int32(height), flags) }) else {
             SDL_Quit(); return nil
         }
+        sdlWindow = win
+
+        #if !PEBBLE_GPU
         guard let ren = SDL_CreateRenderer(win, nil) else {
             SDL_DestroyWindow(win); SDL_Quit(); return nil
         }
-        // a streaming texture the CPU renderer writes into each frame
         guard let tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_RGB24,
                                           SDL_TEXTUREACCESS_STREAMING, rw, rh) else {
             SDL_DestroyRenderer(ren); SDL_DestroyWindow(win); SDL_Quit(); return nil
         }
-        window = win
-        renderer = ren
+        sdlRenderer = ren
         texture = tex
-        // relative mouse mode = FPS-style look (raw deltas, cursor hidden)
-        _ = SDL_SetWindowRelativeMouseMode(window, true)
+        #endif
+
+        _ = SDL_SetWindowRelativeMouseMode(win, true)   // FPS-style mouse look
     }
 
-    var renderSize: (Int, Int) { (Int(rw), Int(rh)) }
+    var renderSize: (Int, Int) {
+        #if PEBBLE_GPU
+        return (0, 0)          // the GPU renderer owns presentation
+        #else
+        return (Int(rw), Int(rh))
+        #endif
+    }
     var shouldClose: Bool { closing }
 
     func poll() -> [FrontendEvent] {
@@ -50,44 +65,44 @@ final class SDLPlatform: Platform {
         while SDL_PollEvent(&e) {
             switch e.type {
             case SDL_EVENT_QUIT.rawValue:
-                closing = true
-                out.append(.quit)
+                closing = true; out.append(.quit)
             case SDL_EVENT_KEY_DOWN.rawValue where !e.key.repeat:
-                if let code = domCode(e.key.scancode) { out.append(.key(code: code, down: true, ctrlOrCmd: false)) }
+                if let c = domCode(e.key.scancode) { out.append(.key(code: c, down: true, ctrlOrCmd: false)) }
             case SDL_EVENT_KEY_UP.rawValue:
-                if let code = domCode(e.key.scancode) { out.append(.key(code: code, down: false, ctrlOrCmd: false)) }
+                if let c = domCode(e.key.scancode) { out.append(.key(code: c, down: false, ctrlOrCmd: false)) }
             case SDL_EVENT_MOUSE_MOTION.rawValue:
                 out.append(.mouseDelta(dx: Double(e.motion.xrel), dy: Double(e.motion.yrel)))
             case SDL_EVENT_MOUSE_BUTTON_DOWN.rawValue:
                 out.append(.mouseButton(button: Int(e.button.button), down: true))
             case SDL_EVENT_MOUSE_BUTTON_UP.rawValue:
                 out.append(.mouseButton(button: Int(e.button.button), down: false))
-            default:
-                break
+            default: break
             }
         }
         return out
     }
 
     func present(_ frame: RGBFrame) {
-        // upload the CPU framebuffer and blit it scaled to the window
+        #if !PEBBLE_GPU
         frame.px.withUnsafeBytes { raw in
             _ = SDL_UpdateTexture(texture, nil, raw.baseAddress, rw * 3)
         }
-        _ = SDL_RenderClear(renderer)
-        _ = SDL_RenderTexture(renderer, texture, nil, nil)
-        _ = SDL_RenderPresent(renderer)
+        _ = SDL_RenderClear(sdlRenderer)
+        _ = SDL_RenderTexture(sdlRenderer, texture, nil, nil)
+        _ = SDL_RenderPresent(sdlRenderer)
+        #endif
     }
 
     func shutdown() {
+        #if !PEBBLE_GPU
         SDL_DestroyTexture(texture)
-        SDL_DestroyRenderer(renderer)
-        SDL_DestroyWindow(window)
+        SDL_DestroyRenderer(sdlRenderer)
+        #endif
+        SDL_DestroyWindow(sdlWindow)
         SDL_Quit()
     }
 
     /// SDL3 scancode → DOM-style key code (the strings GameCore's keybinds use).
-    /// Only the gameplay-relevant keys; extend as needed.
     private func domCode(_ sc: SDL_Scancode) -> String? {
         switch sc {
         case SDL_SCANCODE_W: return "KeyW"
