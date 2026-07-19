@@ -28,7 +28,7 @@ final class SDLPlatform: Platform {
         guard SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) else { return nil }
         var flags: SDL_WindowFlags = 0
         #if PEBBLE_GPU
-        flags = SDL_WINDOW_VULKAN     // GPU backend claims the window
+        flags = SDL_WindowFlags(0x0000000010000000)   // SDL_WINDOW_VULKAN (macro not importable)
         #endif
         guard let win = title.withCString({ SDL_CreateWindow($0, Int32(width), Int32(height), flags) }) else {
             SDL_Quit(); return nil

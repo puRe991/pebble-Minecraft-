@@ -54,14 +54,16 @@ final class GPURenderer: Renderer {
             return nil
         }
         defer { SDL_free(code) }
-        var info = SDL_GPUShaderCreateInfo()
-        info.code = code.assumingMemoryBound(to: UInt8.self)
-        info.code_size = size
-        info.entrypoint = "main"
-        info.format = SDL_GPU_SHADERFORMAT_SPIRV
-        info.stage = stage
-        info.num_uniform_buffers = uniformBuffers
-        return SDL_CreateGPUShader(device, &info)
+        return "main".withCString { entry -> OpaquePointer? in
+            var info = SDL_GPUShaderCreateInfo()
+            info.code = UnsafePointer(code.assumingMemoryBound(to: UInt8.self))
+            info.code_size = size
+            info.entrypoint = entry
+            info.format = SDL_GPU_SHADERFORMAT_SPIRV
+            info.stage = stage
+            info.num_uniform_buffers = uniformBuffers
+            return SDL_CreateGPUShader(device, &info)
+        }
     }
 
     private func buildPipeline() {
@@ -72,21 +74,21 @@ final class GPURenderer: Renderer {
         defer { SDL_ReleaseGPUShader(device, vs); SDL_ReleaseGPUShader(device, fs) }
 
         // vertex layout: float3 pos @0, float2 uv @12, uint A @20, uint B @24 (stride 28)
-        var attrs = [
+        let attrs = [
             SDL_GPUVertexAttribute(location: 0, buffer_slot: 0, format: SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, offset: 0),
             SDL_GPUVertexAttribute(location: 1, buffer_slot: 0, format: SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, offset: 12),
             SDL_GPUVertexAttribute(location: 2, buffer_slot: 0, format: SDL_GPU_VERTEXELEMENTFORMAT_UINT,   offset: 20),
             SDL_GPUVertexAttribute(location: 3, buffer_slot: 0, format: SDL_GPU_VERTEXELEMENTFORMAT_UINT,   offset: 24),
         ]
-        var vbDesc = SDL_GPUVertexBufferDescription(
+        let vbDesc = SDL_GPUVertexBufferDescription(
             slot: 0, pitch: 28, input_rate: SDL_GPU_VERTEXINPUTRATE_VERTEX, instance_step_rate: 0)
 
-        attrs.withUnsafeMutableBufferPointer { ap in
-            withUnsafeMutablePointer(to: &vbDesc) { vb in
+        attrs.withUnsafeBufferPointer { ap in
+            withUnsafePointer(to: vbDesc) { vb in
                 var target = SDL_GPUColorTargetDescription()
                 target.format = SDL_GetGPUSwapchainTextureFormat(device, window)
 
-                withUnsafeMutablePointer(to: &target) { tp in
+                withUnsafePointer(to: target) { tp in
                     var info = SDL_GPUGraphicsPipelineCreateInfo()
                     info.vertex_shader = vs
                     info.fragment_shader = fs
