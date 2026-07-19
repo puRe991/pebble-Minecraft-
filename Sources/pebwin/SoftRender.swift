@@ -53,6 +53,12 @@ func renderWorld(_ world: World, _ cam: CamState, _ atlas: Atlas, into f: inout 
                        (0.85, 0.52, 0.32), tw * 0.55)
     let sky = zenith
 
+    // procedural cloud layer: sky rays that cross y = cloudY sample FBM noise.
+    let clouds = FBM(1337, 4, 0.006)
+    let cloudY = 196.0
+    let cloudLit = mix3((0.60, 0.60, 0.66), (1.0, 1.0, 1.0), dayF)          // grey at night, white by day
+    let cloudCol = mix3(cloudLit, (0.97, 0.72, 0.62), tw * 0.5)             // pinkish at dawn/dusk
+
     for py in 0..<H {
         let sv = (1 - 2 * (Double(py) + 0.5) / Double(H)) * tanHalf
         for px in 0..<W {
@@ -63,7 +69,16 @@ func renderWorld(_ world: World, _ cam: CamState, _ atlas: Atlas, into f: inout 
             let n = 1 / (dx * dx + dy * dy + dz * dz).squareRoot()
             dx *= n; dy *= n; dz *= n
 
-            let s = mix3(horizon, sky, max(0, min(1, dy * 1.4)))
+            var s = mix3(horizon, sky, max(0, min(1, dy * 1.4)))
+            // clouds: where an up-going ray crosses the cloud plane, blend puffs in
+            if dy > 0.04 {
+                let t = (cloudY - cam.y) / dy
+                if t > 0 {
+                    let dens = (clouds.sample2(cam.x + dx * t, cam.z + dz * t) + 1) * 0.5
+                    let cov = smoothstepD(max(0, min(1, (dens - 0.5) / 0.2))) * min(1, dy * 3)
+                    if cov > 0 { s = mix3(s, cloudCol, cov * 0.9) }
+                }
+            }
             // castRay returns premultiplied colour + remaining transmittance;
             // whatever light gets through composites over the sky for this ray.
             let c = castRay(world, atlas, cam.x, cam.y, cam.z, dx, dy, dz, maxDist, horizon)
