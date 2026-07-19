@@ -6,9 +6,28 @@ already works, what this change set enables, and what a full playable Windows
 build still requires.
 
 **TL;DR:** the *engine* is portable and this change set makes it build off-Apple.
-The *game window + renderer + audio* are macOS-native and need a separate
-front-end before there is a playable `Pebble.exe`. That front-end is the large,
-remaining piece of work.
+A cross-platform desktop front-end (`pebwin`, SDL3 window + CPU renderer) now
+boots the real engine into a **playable Windows window**, and CI builds a
+self-contained `pebwin.exe` you can download and double-click. The macOS-native
+Metal renderer/audio are still the fuller experience; the Windows front-end is a
+preview that shares the same engine.
+
+---
+
+## Download a ready-to-run Windows build
+
+Every CI run on this branch builds and **smoke-tests** a self-contained bundle
+(the exe plus its Swift runtime and `SDL3.dll`, ~31 MB zipped):
+
+1. Open the [Actions tab](../../actions) and click the latest green **CI** run
+   on this branch.
+2. Under **Artifacts**, download **`pebble-windows-exe`** and unzip it.
+3. Double-click **`play.bat`** (or run `pebwin.exe --window`) to open a window.
+
+Controls: **WASD** move, **mouse** look, **Space** jump, **Shift** sneak,
+**Esc**/close to quit. If SmartScreen warns about an unsigned app, choose
+*More info → Run anyway*. The bundle is self-contained — CI verifies it launches
+with only its own DLLs on `PATH`, so no separate Swift or SDL install is needed.
 
 ---
 
