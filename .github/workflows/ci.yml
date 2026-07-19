@@ -55,7 +55,8 @@ jobs:
           git clone --depth 1 --branch main https://github.com/libsdl-org/SDL.git /tmp/SDL
           cmake -S /tmp/SDL -B /tmp/SDL/build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release -DSDL_SHARED=ON -DSDL_STATIC=OFF \
-            -DSDL_TEST_LIBRARY=OFF -DSDL_X11=OFF -DSDL_WAYLAND=OFF
+            -DSDL_TEST_LIBRARY=OFF -DSDL_X11=OFF -DSDL_WAYLAND=OFF \
+            -DSDL_UNIX_CONSOLE_BUILD=ON
           cmake --build /tmp/SDL/build
           cmake --install /tmp/SDL/build
           ldconfig || true
