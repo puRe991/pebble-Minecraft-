@@ -99,3 +99,53 @@ jobs:
         with:
           name: first-person-windows
           path: pebble-view-windows.bmp
+
+  windows-exe:
+    name: Build a playable Windows .exe (SDL window)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Swift
+        uses: SwiftyLab/setup-swift@v1
+        with:
+          swift-version: "6.1"
+      - name: Install SDL3 (vcpkg)
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install "sdl3:x64-windows"
+      - name: Build pebwin (release, SDL window)
+        shell: pwsh
+        env:
+          PEBBLE_SDL: "1"
+        run: |
+          $inc = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\include"
+          $lib = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib"
+          swift build -c release --product pebwin -Xcc "-I$inc" -Xlinker "-L$lib"
+      - name: Assemble the distributable
+        shell: pwsh
+        run: |
+          $dist = "pebble-windows"
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          Copy-Item ".build\release\pebwin.exe" $dist
+          Copy-Item "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin\SDL3.dll" $dist
+          # bundle the Swift runtime DLLs the exe links against
+          $swiftExe = (Get-Command swift.exe).Source
+          $rt = Split-Path $swiftExe
+          Get-ChildItem "$rt\*.dll" |
+            Where-Object { $_.Name -match '^(swift|Foundation|dispatch|BlocksRuntime|_Foundation|_?[Cc]oncurrency|_?StringProcessing|_?RegexParser|icu|swiftSynchronization|swiftWinSDK|swiftCRT|vcruntime|msvcp)' } |
+            Copy-Item -Destination $dist -ErrorAction SilentlyContinue
+          "@echo off`r`nstart """" pebwin.exe --window`r`n" | Out-File -Encoding ascii "$dist\play.bat"
+          @"
+          Pebble for Windows (preview build)
+
+          Double-click play.bat (or run pebwin.exe --window) to open a window.
+          Controls: WASD move, mouse look, Space jump, Shift sneak, Esc/close to quit.
+          This is the CPU renderer (textured, day/night). Everything runs locally.
+
+          If Windows SmartScreen warns about an unsigned app, choose "More info" -> "Run anyway".
+          "@ | Out-File -Encoding ascii "$dist\README.txt"
+          Get-ChildItem $dist | Select-Object Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pebble-windows-exe
+          path: pebble-windows
