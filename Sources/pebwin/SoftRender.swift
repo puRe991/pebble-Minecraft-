@@ -82,6 +82,16 @@ func renderWorld(_ world: World, _ cam: CamState, _ atlas: Atlas, into f: inout 
             dx *= n; dy *= n; dz *= n
 
             var s = mix3(horizon, sky, max(0, min(1, dy * 1.4)))
+            // stars: hash the (fine-quantised) ray direction; sparse hits become
+            // points, faded in by how dark it is.
+            let night = 1 - dayF
+            if night > 0.12 && dy > -0.1 {
+                let hn = hash3(9137, Int((dx * 380).rounded()), Int((dy * 380).rounded()), Int((dz * 380).rounded()))
+                if hn % 1600 < 3 {
+                    let b = (0.55 + Double((hn >> 9) & 0xFF) / 255 * 0.45) * night
+                    s = mix3(s, (b, b, min(1, b * 1.05)), night)
+                }
+            }
             // sun / moon disc (with a soft glow) where the ray points at it
             let sf = dx * sdx + dy * sdy + dz * sdz
             if sdy > -0.15 {                              // sun up-ish

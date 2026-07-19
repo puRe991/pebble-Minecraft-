@@ -137,10 +137,15 @@ func finish() -> Never {
         cam.y += 5
         cam.pitch = 0.10
         if let t = shotTime {
-            // set the time of day and turn to face the sun/moon for the shot
+            // set the time of day and frame the sun (day) or the moon+stars (night)
             game.world.dayTime = ((t % 24000) + 24000) % 24000
             let beta = Double(game.world.dayTime) / 24000 * 2 * .pi
-            cam.yaw = atan2(-cos(beta), 0.35)
+            let sdx = cos(beta), sdy = sin(beta)
+            if sdy > -0.05 {
+                cam.yaw = atan2(-sdx, 0.35); cam.pitch = 0.10        // face the sun, level-ish
+            } else {
+                cam.yaw = atan2(sdx, -0.35); cam.pitch = -0.30       // face the moon, look up
+            }
         }
         print(String(format: "pebwin: rendering %d×%d frame from (%.1f, %.1f, %.1f)…",
                      renderW, renderH, cam.x, cam.y, cam.z))
