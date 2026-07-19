@@ -125,22 +125,23 @@ bloom, the single-draw-call UI canvas) all has to be reproduced.
    physics, AI, lighting, meshing — then reports), and opens a real SDL3 window
    with input wired into `GameCore` when built with `PEBBLE_SDL=1`. Audio synth
    and the voxel renderer are the parts still stubbed.
-5. 🚧 **Renderer** — **playable now via a CPU renderer.** `SoftRender.swift`
-   raycasts the real voxel world into a framebuffer (first-person, face-shaded),
-   which the SDL window presents each frame — so with `PEBBLE_SDL=1` you can walk
-   around a Pebble world on Windows today. CI renders a frame headlessly on
-   Windows/Linux each run (`first-person-*` artifacts). For fidelity/perf, a
-   **GPU renderer skeleton exists**: `GPURenderer.swift` (built with
-   `PEBBLE_GPU=1`) implements `Renderer` on **SDL_gpu** — SDL3's GPU API, which
-   targets Vulkan, D3D12 and Metal from one path. It wires up the device, a
-   graphics pipeline over the engine's 28-byte vertex format, per-section GPU
-   buffers fed from `uploadMesh`, a depth buffer, and a per-frame
-   view-projection uniform, then draws every section. CI compile-checks it (SDL3
-   built from source, `PEBBLE_GPU=1 swift build`). It needs a GPU + display to
-   run and its shaders compiled to SPIR-V (`Sources/pebwin/shaders/`). Remaining:
-   atlas texture sampling, biome tint, AO, the cutout/translucent passes, then
-   shadows/SSAO/bloom/ACES — mirroring the macOS `WorldRenderer` order. The CPU
-   renderer stays the fallback and reference.
+5. 🚧 **Renderer** — **playable now via a CPU renderer, with atlas textures.**
+   `SoftRender.swift` raycasts the real voxel world into a framebuffer and
+   samples the engine's code-generated texture atlas (`Atlas.swift` →
+   `buildAtlas`) per hit face, with biome tint and face shading — so with
+   `PEBBLE_SDL=1` you can walk around a *textured* Pebble world on Windows today.
+   CI renders a frame headlessly on Windows/Linux each run (`first-person-*`
+   artifacts). The **GPU renderer** (`GPURenderer.swift`, `PEBBLE_GPU=1`)
+   implements `Renderer` on **SDL_gpu** — SDL3's GPU API (Vulkan/D3D12/Metal from
+   one path): device, a graphics pipeline over the engine's 28-byte vertex
+   format, per-section GPU buffers from `uploadMesh`, a depth buffer, a per-frame
+   view-projection uniform, **and the atlas uploaded as a 2-D array texture** with
+   a sampler; the shaders decode tile/light/tint from vertex words A/B and sample
+   it. CI compile-checks it (SDL3 from source, `PEBBLE_GPU=1 swift build`). It
+   needs a GPU + display to run and its shaders compiled to SPIR-V
+   (`Sources/pebwin/shaders/`). Remaining: the cutout/translucent passes and the
+   post stack (shadows/SSAO/bloom/ACES) — mirroring the macOS `WorldRenderer`
+   order. The CPU renderer stays the fallback and reference.
 6. **Packaging** — `.exe` + installer, resources bundled beside it.
 
 ### Building the GPU path
