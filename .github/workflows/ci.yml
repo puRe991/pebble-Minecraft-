@@ -148,7 +148,21 @@ jobs:
             $vcdir = Split-Path $vc.Trim()
             Copy-Item "$vcdir\vcruntime140*.dll","$vcdir\msvcp140*.dll" -Destination $dist -Force -ErrorAction SilentlyContinue
           }
+          # prune compiler/tooling DLLs — keep only the actual runtime set (the
+          # smoke test below re-verifies the trimmed bundle still launches)
+          $keep = @(
+            'swiftCore','swiftCRT','swiftWinSDK','swiftSwiftOnoneSupport',
+            'swift_Concurrency','swift_StringProcessing','swift_RegexParser',
+            'swiftSynchronization','swiftDispatch','swiftRegexBuilder','swiftObservation',
+            'swiftDistributed','swiftDemangle',
+            'Foundation','FoundationEssentials','FoundationInternationalization',
+            'FoundationNetworking','FoundationXML','_FoundationICU','_FoundationCShims',
+            'dispatch','BlocksRuntime',
+            'vcruntime140','vcruntime140_1','vcruntime140_threads','msvcp140','SDL3'
+          )
+          Get-ChildItem "$dist\*.dll" | Where-Object { $keep -notcontains $_.BaseName } | Remove-Item -Force
           Get-ChildItem $dist | Select-Object Name, Length
+          "{0:N1} MB total" -f ((Get-ChildItem $dist -Recurse | Measure-Object Length -Sum).Sum / 1MB)
           "@echo off`r`nstart """" pebwin.exe --window`r`n" | Out-File -Encoding ascii "$dist\play.bat"
           @"
           Pebble for Windows (preview build)
@@ -160,20 +174,20 @@ jobs:
           If Windows SmartScreen warns about an unsigned app, choose "More info" -> "Run anyway".
           "@ | Out-File -Encoding ascii "$dist\README.txt"
           Get-ChildItem $dist | Select-Object Name, Length
-      - uses: actions/upload-artifact@v4
-        with:
-          name: pebble-windows-exe
-          path: pebble-windows
       - name: Smoke-test the packaged exe (isolated PATH)
         shell: pwsh
         run: |
           # run with only the dist folder + Windows system dirs on PATH, so the
           # bundled DLLs are the only Swift/SDL runtime available — proves the
-          # package is self-contained.
+          # package is self-contained before we ship it.
           $dist = (Resolve-Path pebble-windows).Path
           $env:PATH = "$dist;$env:SystemRoot\System32;$env:SystemRoot"
           Push-Location $dist
           & ".\pebwin.exe" --seed 1 --ticks 5 --shot smoke.bmp
           Pop-Location
-          if (Test-Path "$dist\smoke.bmp") { Write-Host "OK: the packaged exe ran standalone and wrote smoke.bmp" }
+          if (Test-Path "$dist\smoke.bmp") { Write-Host "OK: the packaged exe ran standalone and wrote smoke.bmp"; Remove-Item "$dist\smoke.bmp" }
           else { Write-Error "the packaged exe did not run standalone"; exit 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pebble-windows-exe
+          path: pebble-windows
