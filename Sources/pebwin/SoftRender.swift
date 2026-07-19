@@ -19,6 +19,10 @@ struct RGBFrame {
         px[o] = u8(r); px[o + 1] = u8(g); px[o + 2] = u8(b)
     }
 }
+// air-neighbour offset per face (0=-y 1=+y 2=-z 3=+z 4=-x 5=+x) — where the
+// light that illuminates that face lives.
+private let FACE_OFF: [(Int, Int, Int)] = [(0, -1, 0), (0, 1, 0), (0, 0, -1), (0, 0, 1), (-1, 0, 0), (1, 0, 0)]
+
 @inline(__always) private func u8(_ v: Double) -> UInt8 { UInt8(max(0, min(255, v * 255 + 0.5))) }
 @inline(__always) private func frac(_ x: Double) -> Double { x - x.rounded(.down) }
 @inline(__always) private func mix3(_ a: (Double, Double, Double), _ b: (Double, Double, Double), _ t: Double) -> (Double, Double, Double) {
@@ -104,7 +108,10 @@ private func castRay(_ world: World, _ atlas: Atlas, _ ox: Double, _ oy: Double,
                 var (r, g, b, a) = atlas.sample(tile, u, v)
                 let tint = blockTint(def.name, face)
                 r *= tint.0; g *= tint.1; b *= tint.2
-                let lit = 0.35 + 0.65 * faceShade
+                // real engine light at the air neighbour × directional face shade
+                let off = FACE_OFF[face]
+                let light = world.lightAt(ix + off.0, iy + off.1, iz + off.2) / 15.0
+                let lit = max(0.05, light) * faceShade
                 let fog = max(0, 1 - travelled / Double(maxDist)) * 0.85 + 0.15
                 let c = mix3(horizon, (r * lit, g * lit, b * lit), fog)
                 return (c.0, c.1, c.2, a)
