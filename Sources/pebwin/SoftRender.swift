@@ -59,6 +59,18 @@ func renderWorld(_ world: World, _ cam: CamState, _ atlas: Atlas, into f: inout 
     let cloudLit = mix3((0.60, 0.60, 0.66), (1.0, 1.0, 1.0), dayF)          // grey at night, white by day
     let cloudCol = mix3(cloudLit, (0.97, 0.72, 0.62), tw * 0.5)             // pinkish at dawn/dusk
 
+    // sun position on an east→overhead→west arc from the world clock; the moon
+    // is opposite. Terrain faces toward the light get brighter (directional
+    // shading), and a disc is drawn where a ray points at the sun/moon.
+    let frac = Double(((world.dayTime % 24000) + 24000) % 24000) / 24000
+    let beta = frac * 2 * .pi
+    var sdx = cos(beta), sdy = sin(beta), sdz = 0.35
+    let sl = (sdx * sdx + sdy * sdy + sdz * sdz).squareRoot()
+    sdx /= sl; sdy /= sl; sdz /= sl
+    let sunUp = sdy > -0.05
+    let ld = sunUp ? (sdx, sdy, sdz) : (-sdx, -sdy, -sdz)   // moon light when sun is down
+    let dirStrength = sunUp ? 1.0 : 0.35
+
     for py in 0..<H {
         let sv = (1 - 2 * (Double(py) + 0.5) / Double(H)) * tanHalf
         for px in 0..<W {
@@ -70,6 +82,17 @@ func renderWorld(_ world: World, _ cam: CamState, _ atlas: Atlas, into f: inout 
             dx *= n; dy *= n; dz *= n
 
             var s = mix3(horizon, sky, max(0, min(1, dy * 1.4)))
+            // sun / moon disc (with a soft glow) where the ray points at it
+            let sf = dx * sdx + dy * sdy + dz * sdz
+            if sdy > -0.15 {                              // sun up-ish
+                if sf > 0.9992 { s = (1.0, 0.96, 0.82) }
+                else if sf > 0.994 { s = mix3(s, (1.0, 0.88, 0.66), (sf - 0.994) / 0.0052 * 0.7) }
+            }
+            if sdy < 0.15 {                               // moon opposite
+                let mf = -sf
+                if mf > 0.9994 { s = (0.92, 0.93, 0.98) }
+                else if mf > 0.996 { s = mix3(s, (0.78, 0.80, 0.9), (mf - 0.996) / 0.0034 * 0.5) }
+            }
             // clouds: where an up-going ray crosses the cloud plane, blend puffs in
             if dy > 0.04 {
                 let t = (cloudY - cam.y) / dy
@@ -81,7 +104,7 @@ func renderWorld(_ world: World, _ cam: CamState, _ atlas: Atlas, into f: inout 
             }
             // castRay returns premultiplied colour + remaining transmittance;
             // whatever light gets through composites over the sky for this ray.
-            let c = castRay(world, atlas, cam.x, cam.y, cam.z, dx, dy, dz, maxDist, horizon)
+            let c = castRay(world, atlas, cam.x, cam.y, cam.z, dx, dy, dz, maxDist, horizon, ld, dirStrength)
             f.set(px, py, c.0 + c.3 * s.0, c.1 + c.3 * s.1, c.2 + c.3 * s.2)
         }
     }
@@ -93,7 +116,8 @@ func renderWorld(_ world: World, _ cam: CamState, _ atlas: Atlas, into f: inout 
 /// through; cutout blocks (leaves/glass) are alpha-tested per texel.
 private func castRay(_ world: World, _ atlas: Atlas, _ ox: Double, _ oy: Double, _ oz: Double,
                      _ dx: Double, _ dy: Double, _ dz: Double, _ maxDist: Int,
-                     _ horizon: (Double, Double, Double)) -> (Double, Double, Double, Double) {
+                     _ horizon: (Double, Double, Double),
+                     _ ld: (Double, Double, Double), _ dirStrength: Double) -> (Double, Double, Double, Double) {
     var ix = Int(ox.rounded(.down)), iy = Int(oy.rounded(.down)), iz = Int(oz.rounded(.down))
     let stepX = dx > 0 ? 1 : -1, stepY = dy > 0 ? 1 : -1, stepZ = dz > 0 ? 1 : -1
     let tDX = dx == 0 ? Double.infinity : abs(1 / dx)
@@ -129,10 +153,12 @@ private func castRay(_ world: World, _ atlas: Atlas, _ ox: Double, _ oy: Double,
                 var (r, g, b, a) = atlas.sample(tile, u, v)
                 let tint = blockTint(def.name, face)
                 r *= tint.0; g *= tint.1; b *= tint.2
-                // real engine light at the air neighbour × directional face shade
+                // engine light × a blend of ambient face shade and sun-direction shade
                 let off = FACE_OFF[face]
                 let light = world.lightAt(ix + off.0, iy + off.1, iz + off.2) / 15.0
-                let lit = max(0.05, light) * faceShade
+                let ndl = max(0, Double(off.0) * ld.0 + Double(off.1) * ld.1 + Double(off.2) * ld.2)
+                let shade = 0.55 * faceShade + 0.45 * (0.4 + 0.6 * ndl * dirStrength)
+                let lit = max(0.05, light) * shade
                 let fog = max(0, 1 - travelled / Double(maxDist)) * 0.85 + 0.15
                 let c = mix3(horizon, (r * lit, g * lit, b * lit), fog)
                 return (c.0, c.1, c.2, a)
