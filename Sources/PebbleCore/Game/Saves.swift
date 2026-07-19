@@ -12,9 +12,9 @@
 import Foundation
 
 // Apple exposes SQLite as the `SQLite3` system module; on other platforms we
-// bind the system libsqlite3 through the `CSQLite` shim target (see Package.swift
-// and Sources/CSQLite/). The C API is identical either way, so nothing below
-// changes.
+// build the vendored SQLite amalgamation through the `CSQLite` target (see
+// Package.swift and Sources/CSQLite/). The C API is identical either way, so
+// nothing below changes.
 #if canImport(SQLite3)
 import SQLite3
 #else

@@ -1,0 +1,37 @@
+name: CI
+
+# Verifies the portable engine (PebbleCore) and its golden test harness
+# (pebsmoke) build and pass off-Apple. The macOS game app is not built here —
+# it needs a Metal-capable runner; see WINDOWS.md.
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    name: Engine + golden suite (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (release)
+        run: swift build -c release
+      - name: Golden suite (456 checks)
+        run: swift run -c release pebsmoke
+
+  windows:
+    name: Engine + golden suite (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Swift
+        uses: SwiftyLab/setup-swift@v1
+        with:
+          swift-version: "6.1"
+      - name: Build (release)
+        run: swift build -c release
+      - name: Golden suite (456 checks)
+        run: swift run -c release pebsmoke

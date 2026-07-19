@@ -19,11 +19,18 @@ let coreDependencies: [Target.Dependency] = [
 ]
 
 var targets: [Target] = [
-    // system libsqlite3 binding for non-Apple platforms (unused on macOS)
-    .systemLibrary(
+    // Vendored SQLite (public-domain amalgamation) for non-Apple platforms.
+    // On macOS PebbleCore imports Apple's built-in `SQLite3` module instead and
+    // this target is never compiled (the dependency below is macOS-excluded), so
+    // the flagship macOS build stays Apple-frameworks-only.
+    .target(
         name: "CSQLite",
         path: "Sources/CSQLite",
-        providers: [.apt(["libsqlite3-dev"])]
+        sources: ["sqlite3.c"],
+        publicHeadersPath: "include",
+        cSettings: [
+            .define("SQLITE_THREADSAFE", to: "1"),
+        ]
     ),
     // the engine: headless-testable, no AppKit dependencies
     .target(
