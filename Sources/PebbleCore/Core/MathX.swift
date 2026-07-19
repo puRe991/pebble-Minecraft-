@@ -48,6 +48,13 @@ public struct simd_float4x4 {
 public let matrix_identity_float4x4 = simd_float4x4(1)
 #endif
 
+// ---- clock -------------------------------------------------------------------
+/// Wall-clock seconds since the 2001 reference epoch. Identical in value to the
+/// old `CFAbsoluteTimeGetCurrent()` but available off-Apple, where CoreFoundation
+/// isn't. Used only for real-time pacing/profiling — never in the deterministic
+/// sim, so it does not affect goldens.
+@inline(__always) public func nowSeconds() -> Double { Date().timeIntervalSinceReferenceDate }
+
 // ---- scalars -----------------------------------------------------------------
 @inline(__always) public func clampD(_ x: Double, _ lo: Double, _ hi: Double) -> Double { x < lo ? lo : (x > hi ? hi : x) }
 @inline(__always) public func clampF(_ x: Float, _ lo: Float, _ hi: Float) -> Float { x < lo ? lo : (x > hi ? hi : x) }
