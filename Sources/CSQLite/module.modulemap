@@ -1,0 +1,9 @@
+// Binds the system-provided SQLite (libsqlite3) on platforms where Swift does
+// not ship an Apple-style `SQLite3` module (Windows, Linux). On Apple platforms
+// PebbleCore imports the built-in `SQLite3` module instead and never touches
+// this target — see the conditional dependency in Package.swift.
+module CSQLite {
+    header "shim.h"
+    link "sqlite3"
+    export *
+}

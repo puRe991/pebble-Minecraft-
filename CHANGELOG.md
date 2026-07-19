@@ -3,6 +3,21 @@
 All notable changes to Pebble. Versions follow `MAJOR.MINOR.PATCH`; the
 in-app version string comes from `PEBBLE_VERSION` (PebbleCore/Game/Saves.swift).
 
+## Unreleased — cross-platform engine groundwork
+
+- **The engine now builds off-Apple (Windows/Linux), headless.** The two
+  Apple-only bindings in `PebbleCore` are behind `#if` guards, so the macOS
+  build is byte-for-byte unchanged:
+  - `simd` gains a pure-Swift fallback (`Core/MathX.swift`) on platforms without
+    Apple's `simd` module.
+  - SQLite binds the system `libsqlite3` through a new `CSQLite` shim
+    (`Sources/CSQLite/`) instead of Apple's `SQLite3` module.
+  - `Package.swift` adds the AppKit/Metal `Pebble` app target only on macOS;
+    elsewhere `swift build` compiles just `PebbleCore` + `pebsmoke`.
+- This does **not** produce a playable Windows build — the window, Metal
+  renderer, and audio are still macOS-native. See [WINDOWS.md](WINDOWS.md) for
+  the full status and the front-end porting roadmap.
+
 ## 1.0.5 — 2026-07-03 — keybind fix (#13)
 
 - **Shift and Control can now be assigned to keybinds.** On macOS the modifier

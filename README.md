@@ -73,6 +73,8 @@ pebble test         run the 456-check golden test suite
 
 For development you can also run straight from the checkout — `swift run -c release Pebble` — and the app will find its packaged assets in `packaging/`.
 
+**Windows / Linux (experimental):** the game app is macOS-native (Metal/AppKit), but the engine and its golden test suite are portable and build off-Apple with `swift build -c release` / `swift run -c release pebsmoke`. There is no playable Windows build yet — see [WINDOWS.md](WINDOWS.md) for the porting status and roadmap.
+
 ## Controls
 
 WASD to move, mouse to look, Space to jump, Shift to sneak, Ctrl (or double-tap forward) to sprint, E for inventory, Esc to pause. F1 hides the GUI, F3 toggles the debug overlay, F11 toggles fullscreen (also in Options → Video). Scroll the hotbar with the wheel or trackpad. Everything is rebindable in Options → Controls.
