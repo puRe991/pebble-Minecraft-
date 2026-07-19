@@ -3,13 +3,15 @@
 //
 // macOS: builds the full game (engine + AppKit/Metal app + test harness).
 //   swift build -c release
-// Windows/Linux (experimental — see WINDOWS.md): builds only the portable,
-//   headless engine and its golden test harness. The AppKit/Metal app target
-//   is macOS-only and is not added to the package off-Apple.
-//   swift build -c release          (builds PebbleCore + pebsmoke)
-//   swift run   -c release pebsmoke (runs the 456-check golden suite)
+// Windows/Linux (experimental — see WINDOWS.md): builds the portable engine and
+//   its headless tools (pebsmoke tests, pebmap world renderer, pebwin front-end).
+//   The AppKit/Metal app target is macOS-only and is not added off-Apple.
+//   swift build                     (PebbleCore + pebsmoke + pebmap + pebwin)
+//   swift run pebsmoke              (the 456-check golden suite)
+//   swift run pebwin --ticks 200    (boot + tick the real sim, headless)
 
 import PackageDescription
+import Foundation
 
 // The engine is portable; its only native binding is SQLite. Apple ships an
 // `SQLite3` module, so on Apple platforms PebbleCore needs no extra dependency.
@@ -17,6 +19,15 @@ import PackageDescription
 let coreDependencies: [Target.Dependency] = [
     .target(name: "CSQLite", condition: .when(platforms: [.linux, .windows, .android])),
 ]
+
+// The desktop front-end (pebwin) can open a real SDL3 window when built with
+// PEBBLE_SDL=1 (and SDL3 dev libraries installed). Off by default so the normal
+// build and CI stay SDL-free and run pebwin headless.
+let useSDL = ProcessInfo.processInfo.environment["PEBBLE_SDL"] != nil
+let pebwinDeps: [Target.Dependency] = useSDL ? ["PebbleCore", "CSDL"] : ["PebbleCore"]
+let pebwinSwift: [SwiftSetting] = useSDL
+    ? [.swiftLanguageMode(.v5), .define("PEBBLE_SDL")]
+    : [.swiftLanguageMode(.v5)]
 
 var targets: [Target] = [
     // Vendored SQLite (public-domain amalgamation) for non-Apple platforms.
@@ -58,7 +69,22 @@ var targets: [Target] = [
         path: "Sources/pebmap",
         swiftSettings: [.swiftLanguageMode(.v5)]
     ),
+    // the cross-platform desktop front-end. Headless by default (boots + ticks
+    // the real sim — CI runs this on Windows/Linux); opens an SDL3 window under
+    // PEBBLE_SDL=1. The 3D renderer is the remaining piece — see WINDOWS.md.
+    .executableTarget(
+        name: "pebwin",
+        dependencies: pebwinDeps,
+        path: "Sources/pebwin",
+        swiftSettings: pebwinSwift
+    ),
 ]
+
+// system SDL3 binding — declared only when PEBBLE_SDL=1, so the default build
+// and CI never need SDL on the system.
+if useSDL {
+    targets.append(.systemLibrary(name: "CSDL", path: "Sources/CSDL"))
+}
 
 // The app is an AppKit + MTKView (Metal) shell — Apple-only. A Windows/Linux
 // front-end is a separate port (see WINDOWS.md); until then the app target is

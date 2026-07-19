@@ -31,6 +31,8 @@ jobs:
         run: swift run pebsmoke
       - name: Render a world map (seed 4242)
         run: swift run pebmap --seed 4242 --chunks 32 --out pebble-map-linux.bmp
+      - name: Boot + tick the real sim headless (pebwin)
+        run: swift run pebwin --seed 4242 --ticks 200
       - uses: actions/upload-artifact@v4
         with:
           name: world-map-linux
@@ -51,6 +53,8 @@ jobs:
         run: swift run pebsmoke
       - name: Render a world map (seed 4242)
         run: swift run pebmap --seed 4242 --chunks 32 --out pebble-map-windows.bmp
+      - name: Boot + tick the real sim headless (pebwin)
+        run: swift run pebwin --seed 4242 --ticks 200
       - uses: actions/upload-artifact@v4
         with:
           name: world-map-windows

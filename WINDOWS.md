@@ -118,8 +118,24 @@ bloom, the single-draw-call UI canvas) all has to be reproduced.
 3. ✅ **Headless world-gen tool** — `pebmap` generates a world and writes a
    top-down BMP. No realtime renderer needed; validates the engine visually on
    Windows. CI renders one each run and uploads it as an artifact.
-4. **Window + input + audio** via SDL3 — a black window that plays sound and
-   ticks the sim.
-5. **Renderer** — the large piece: bring up the mesh/atlas pipeline first
-   (opaque pass), then layer on entities, particles, sky, shadows, ultra.
+4. 🚧 **Window + input + audio** via SDL3 — **started.** `pebwin`
+   (`Sources/pebwin/`) is the cross-platform front-end. It boots the real engine
+   through the `GameHost` seam and runs the game loop. Headless by default (CI
+   runs it on Windows/Linux: it creates a world and ticks the full sim — worldgen,
+   physics, AI, lighting, meshing — then reports), and opens a real SDL3 window
+   with input wired into `GameCore` when built with `PEBBLE_SDL=1`. Audio synth
+   and the voxel renderer are the parts still stubbed.
+5. **Renderer** — the large piece: implement `Renderer` (`Sources/pebwin/
+   Renderer.swift`) on a GPU API. Bring up the mesh/atlas pipeline first (opaque
+   pass), then layer on entities, particles, sky, shadows, ultra — mirroring the
+   macOS `WorldRenderer` pass order.
 6. **Packaging** — `.exe` + installer, resources bundled beside it.
+
+### Building the desktop window
+
+```bash
+# Windows: vcpkg install sdl3   ·   Linux: apt install libsdl3-dev   ·   macOS: brew install sdl3
+PEBBLE_SDL=1 swift build
+PEBBLE_SDL=1 swift run pebwin --window     # opens an SDL3 window, input → the real engine
+swift run pebwin --seed 4242 --ticks 200   # headless: boot + tick the sim, no SDL needed
+```
