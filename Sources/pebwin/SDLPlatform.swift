@@ -62,19 +62,21 @@ final class SDLPlatform: Platform {
     func poll() -> [FrontendEvent] {
         var out: [FrontendEvent] = []
         var e = SDL_Event()
+        // SDL event-type enums import as Int32 on Windows (MSVC) but e.type is
+        // UInt32 — compare through Int so the same code builds on every platform.
         while SDL_PollEvent(&e) {
-            switch e.type {
-            case SDL_EVENT_QUIT.rawValue:
+            switch Int(e.type) {
+            case Int(SDL_EVENT_QUIT.rawValue):
                 closing = true; out.append(.quit)
-            case SDL_EVENT_KEY_DOWN.rawValue where !e.key.repeat:
+            case Int(SDL_EVENT_KEY_DOWN.rawValue) where !e.key.repeat:
                 if let c = domCode(e.key.scancode) { out.append(.key(code: c, down: true, ctrlOrCmd: false)) }
-            case SDL_EVENT_KEY_UP.rawValue:
+            case Int(SDL_EVENT_KEY_UP.rawValue):
                 if let c = domCode(e.key.scancode) { out.append(.key(code: c, down: false, ctrlOrCmd: false)) }
-            case SDL_EVENT_MOUSE_MOTION.rawValue:
+            case Int(SDL_EVENT_MOUSE_MOTION.rawValue):
                 out.append(.mouseDelta(dx: Double(e.motion.xrel), dy: Double(e.motion.yrel)))
-            case SDL_EVENT_MOUSE_BUTTON_DOWN.rawValue:
+            case Int(SDL_EVENT_MOUSE_BUTTON_DOWN.rawValue):
                 out.append(.mouseButton(button: Int(e.button.button), down: true))
-            case SDL_EVENT_MOUSE_BUTTON_UP.rawValue:
+            case Int(SDL_EVENT_MOUSE_BUTTON_UP.rawValue):
                 out.append(.mouseButton(button: Int(e.button.button), down: false))
             default: break
             }
